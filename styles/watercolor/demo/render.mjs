@@ -9,6 +9,15 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { EXE as CORE_EXE } from '../../../core/render/browser.mjs';
+
+// 编码器：**未设 LEMO_VENC ⇒ 走 GPU 的 h264_nvenc**（用户硬规则：渲染一律 GPU 优先）；
+// 显式 libx264 才走 CPU；其它值报错退出，绝不静默回落 CPU（把 h264_nvenc 打错会以为在用显卡、实际走 CPU）。
+const VENC = process.env.LEMO_VENC || 'h264_nvenc';
+if (VENC !== 'h264_nvenc' && VENC !== 'libx264') { console.error(`LEMO_VENC must be h264_nvenc or libx264, or unset (which means h264_nvenc, the GPU encoder), got '${VENC}'. Refusing to fall back to the CPU encoder silently.`); process.exit(1); }
+// 编码参数：nvenc 的 cq ≈ 原 libx264 的 crf + 5；显式 libx264 时保持原参数。
+const vencArgs = (crf, preset = 'medium') => VENC === 'h264_nvenc'
+  ? ['-c:v', 'h264_nvenc', '-preset', 'p5', '-rc', 'vbr', '-cq', String(crf + 5), '-b:v', '0']
+  : ['-c:v', 'libx264', '-preset', preset, '-crf', String(crf)];
 const STILLS_DIR = path.resolve(process.env.OUT || path.join(path.dirname(fileURLToPath(import.meta.url)), 'stills'));
 const INVOKE_CWD = process.cwd();
 process.chdir(path.dirname(fileURLToPath(import.meta.url)));
@@ -52,7 +61,7 @@ if (mode === 'stills') {
     const br = await chromium.launch({ executablePath: EXE, args: ['--font-render-hinting=none', '--force-color-profile=srgb'] });
     const page = await openPage(br);
     const ff = spawn('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'mjpeg', '-i', '-',
-      '-c:v', 'libx264', '-preset', 'medium', '-crf', '12', '-pix_fmt', 'yuv420p', `out/seg_${w}.mp4`]);
+      ...vencArgs(12), '-pix_fmt', 'yuv420p', `out/seg_${w}.mp4`]);
     for (let f = a; f < b; f++) {
       await page.evaluate(t => window.render(t), f / FPS);
       const buf = await page.screenshot({ type: 'jpeg', quality: 100 });
@@ -72,7 +81,7 @@ if (mode === 'stills') {
   const outF = path.resolve(INVOKE_CWD, process.argv[5] || `out/part_${process.argv[3]}.mp4`);
   const page = await openPage(browser), t0 = Date.now();
   const ff = spawn('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'mjpeg', '-i', '-',
-    '-c:v', 'libx264', '-preset', 'medium', '-crf', '12', '-pix_fmt', 'yuv420p', outF]);
+    ...vencArgs(12), '-pix_fmt', 'yuv420p', outF]);
   for (let f = a; f < b; f++) {
     await page.evaluate(t => window.render(t), f / FPS);
     const buf = await page.screenshot({ type: 'jpeg', quality: 100 });

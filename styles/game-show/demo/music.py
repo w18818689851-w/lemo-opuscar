@@ -276,7 +276,7 @@ for e in EVJ['ev']:
             for i, h in enumerate(['hey_a'] + HEYS): addv(VO[h], t - 0.02 + i * 0.005, 0.3 if v == 'heyAll' else 0.4, -0.6 + 0.24 * i)
         elif v.startswith('count'): addv(VO[v], t - 0.02, 0.9)
         elif v == 'heyVar': addv(VO[['hey_a', 'hey_b', 'hey_c', 'hey_d', 'hey_e', 'hey_f'][e.get('i', 0) % 6]], t - 0.02, 0.6)
-        else: addv(VO[v], t - 0.03, 0.85)
+        else: addv(VO[v], max(0.0, t - 0.03), 0.85)   # max(): t=0 的事件若直接减 0.03 会让 addv 的 i<0 分支把整条人声丢掉（既有缺陷，本轮修）
         continue
     if s == 'slam': addv(stamp(big=True), t, 0.5); add(crash(), t, 0.5)
     elif s == 'pop': addv(pop(f), t, 0.25)

@@ -1,7 +1,7 @@
 // 结尾：画面拉远成一本打开的绘本（真纸：中缝阴影、页面弧度、柔和投影），书躺在蜡笔画的木桌上，
 // 旁边是用短了的蜡笔、一支笔头湿着蓝色的平头刷和一杯洗笔水。翻页 → The End。
 // 桌面空间：右页 = [0,1920]×[0,1080]，左页 = [-1920,0]×[0,1080]，中缝 x = 0。
-import { layer, clear, line, fill, dab, text, handCircle, ellipse, smooth, xf, CAM, BOIL, W, H } from './crayon.js';
+import { layer, clear, line, fill, dab, text, handCircle, ellipse, smooth, xf, CAM, BOIL, W, H, S, OX, OY, fitX, fitY } from './crayon.js';
 import { group, clearGroup, part } from './rig.js';
 import { star } from './chars.js';
 import { PAL } from './pal.js';
@@ -15,6 +15,7 @@ const glc = () => document.getElementById('gl');
 const snap = P => { P.g.setTransform(1, 0, 0, 1, 0, 0); P.g.clearRect(0, 0, W, H); P.g.drawImage(glc(), 0, 0); };
 
 // 桌面镜头：z 缩放，c 中心（桌面坐标）
+// 整张桌面按紧轴 S 缩小、居中（与 sx/sy 同一套换算）：世界坐标不必再乘 FX/FY，只有 toS 里补一个 ×S。
 const camD = track([[46.0, [960, 540, 1]], [47.5, [0, 580, 0.44]], [49.0, [0, 580, 0.44]], [50.4, [960, 560, 0.78]], [52, [960, 560, 0.8]]]);
 export const TURN = [47.6, 48.8];
 
@@ -23,26 +24,28 @@ export function endFrame(comp, t, api) {
   // 1) 右页 = 这一页画（整页视角，无字幕、无暗角）
   api.drawPage(comp, t, [1600, 900, 0.6], { subs: false, vig: 0 }); snap(pageR);
   // 2) 左页：书上印着的那一句
-  CAM.x = 960; CAM.y = 540; CAM.s = 1; clear(TXT);
-  text(TXT, 'And at last,', 960, 470, { size: 92, col: K.ink, seed: 301, p: 0.95, stroke: 1.5 });
-  text(TXT, 'the moon fell asleep.', 960, 590, { size: 92, col: K.ink, seed: 302, p: 0.95, stroke: 1.5 });
+  // CAM.s = S ⇒ sx/sy 退化成「设计帧 → 当前帧等比装入」，故书页里的世界坐标/几何量（cr、星星）照旧写设计值；
+  // 只有 text() 走画布坐标，需要显式 fitX/fitY + 字号 ×S。
+  CAM.x = 960; CAM.y = 540; CAM.s = S; clear(TXT);
+  text(TXT, 'And at last,', fitX(960), fitY(470), { size: 92 * S, col: K.ink, seed: 301, p: 0.95, stroke: 1.5 * S });
+  text(TXT, 'the moon fell asleep.', fitX(960), fitY(590), { size: 92 * S, col: K.ink, seed: 302, p: 0.95, stroke: 1.5 * S });
   clear(DUM); star({ k: DUM, f: TXT, l: TXT }, [960, 760], 26, 330, 0.2, K.yellow, true);
-  comp.paperCam(2000, 300, 1); comp.begin(PAL.paper); comp.crayon(TXT.c); comp.finish({ vig: 0, emb: 0.55 }); snap(pageL);
+  comp.paperCam(2000, 300, S); comp.begin(PAL.paper); comp.crayon(TXT.c); comp.finish({ vig: 0, emb: 0.55 }); snap(pageL);
   // 3) 下一页：The End
   clear(TXT);
-  text(TXT, 'The End', 960, 520, { size: 230, font: 'Gaegu', weight: 700, col: K.ink, seed: 311, p: 0.95, stroke: 3 });
+  text(TXT, 'The End', fitX(960), fitY(520), { size: 230 * S, font: 'Gaegu', weight: 700, col: K.ink, seed: 311, p: 0.95, stroke: 3 * S });
   { const cr = []; for (let i = 0; i <= 24; i++) { const a = -2.2 + 4.4 * i / 24; cr.push([1330 + Math.cos(a) * 66, 330 + Math.sin(a) * 66]); } for (let i = 0; i <= 24; i++) { const a = 1.95 - 3.9 * i / 24; cr.push([1296 + Math.cos(a) * 60, 322 + Math.sin(a) * 60]); }
     fill(TXT, cr, { col: K.yellow, p: 0.9, gap: 6, w: 8, seed: 320, over: 2 }); line(TXT, [...cr, cr[0]], { w: 6, seed: 321 });
     line(TXT, [[1352, 318], [1360, 326], [1370, 320]], { w: 5, seed: 322 }); }
-  text(TXT, 'Crayon Picture Book', 960, 720, { size: 76, col: K.ink, seed: 312, p: 0.9 });
-  text(TXT, 'LemoLab × Claude Opus 5.5', 960, 830, { size: 60, col: K.ink, seed: 313, p: 0.8 });
-  comp.paperCam(4100, 700, 1); comp.begin(PAL.paper); comp.crayon(TXT.c); comp.finish({ vig: 0, emb: 0.55 }); snap(pageEnd);
+  text(TXT, 'Crayon Picture Book', fitX(960), fitY(720), { size: 76 * S, col: K.ink, seed: 312, p: 0.9 });
+  text(TXT, 'LemoLab × Claude Opus 5.5', fitX(960), fitY(830), { size: 60 * S, col: K.ink, seed: 313, p: 0.8 });
+  comp.paperCam(4100, 700, S); comp.begin(PAL.paper); comp.crayon(TXT.c); comp.finish({ vig: 0, emb: 0.55 }); snap(pageEnd);
   // 4) 翻过去那页的背面：透出一点正面的画（镜像）
-  comp.paperCam(700, 3100, 1); comp.begin(PAL.paper); comp.finish({ vig: 0, emb: 0.55 }); snap(pageBack);
+  comp.paperCam(700, 3100, S); comp.begin(PAL.paper); comp.finish({ vig: 0, emb: 0.55 }); snap(pageBack);
   { const g = pageBack.g; g.save(); g.globalAlpha = 0.07; g.globalCompositeOperation = 'multiply'; g.translate(W, 0); g.scale(-1, 1); g.drawImage(pageR.c, 0, 0); g.restore(); }
 
   // 5) 桌面（蜡笔画）+ 蜡笔 + 刷子 + 水杯
-  CAM.x = cx; CAM.y = cy; CAM.s = z;
+  CAM.x = cx; CAM.y = cy; CAM.s = z * S;
   clear(DESK.f); clear(DESK.l); clearGroup(OBJ); clear(WET); clear(SUBK); clear(SUBT);
   drawDesk(DESK);
   drawTools(OBJ, WET);
@@ -52,7 +55,7 @@ export function endFrame(comp, t, api) {
   if (api.subTo) api.subTo(SUBK, SUBT, t);
   // 合成
   const k = pr(t, 46.0, 46.9);                // 从"满屏一页"过渡到桌面：暗角、纸纹、台灯慢慢出来
-  comp.paperCam(cx, cy, z); comp.begin(PAL.paper);
+  comp.paperCam(cx, cy, z * S); comp.begin(PAL.paper);
   if (k > 0) { comp.crayon(DESK.f.c); comp.crayon(DESK.l.c); }
   comp.image(book.c);
   if (k > 0) { comp.group(OBJ, { goff: [hash(BOIL.step) * 200, 0] }); comp.wash(WET.c, { color: PAL.wash, resist: 0.9 }); }
@@ -60,7 +63,8 @@ export function endFrame(comp, t, api) {
   comp.finish({ vig: 0.3 * k, emb: 0.55 * k, lamp: [0.42, 0.62, 0.62, 0.85 * k] });
 }
 
-const toS = (x, y, cx, cy, z, f = 1) => [((x - cx) * f) * z + W / 2, ((y - cy) * f) * z + H / 2];
+// 桌面坐标 → 屏幕：整张桌面按紧轴 S 缩小、居中（与 sx/sy 同一套换算），故 z 再乘 S。
+const toS = (x, y, cx, cy, z, f = 1) => [((x - cx) * f) * z * S + W / 2, ((y - cy) * f) * z * S + H / 2];
 
 function drawBook(g, t, cx, cy, z) {
   g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, H);
@@ -69,12 +73,12 @@ function drawBook(g, t, cx, cy, z) {
   const k = pr(t, 46.0, 46.9);
   // 投影 + 硬壳封面
   if (k > 0) {
-    g.save(); g.filter = `blur(${Math.max(1, 34 * z)}px)`; g.fillStyle = `rgba(40,22,10,${0.5 * k})`;
+    g.save(); g.filter = `blur(${Math.max(1, 34 * z * S)}px)`; g.fillStyle = `rgba(40,22,10,${0.5 * k})`;
     const [a, b] = P(-1960 + 40, -40 + 60), [c, d] = P(1960 + 40, 1120 + 60); g.fillRect(a, b, c - a, d - b); g.restore();
-    g.fillStyle = '#2c3b6e'; const [a2, b2] = P(-1975, -38), [c2, d2] = P(1975, 1118); rr(g, a2, b2, c2 - a2, d2 - b2, 14 * z); g.fill();
+    g.fillStyle = '#2c3b6e'; const [a2, b2] = P(-1975, -38), [c2, d2] = P(1975, 1118); rr(g, a2, b2, c2 - a2, d2 - b2, 14 * z * S); g.fill();
     g.fillStyle = 'rgba(0,0,0,0.25)'; const [s0] = P(-40, 0), [s1] = P(40, 0); g.fillRect(s0, b2, s1 - s0, d2 - b2);
     // 书口（页边厚度）
-    g.strokeStyle = 'rgba(120,105,80,0.55)'; g.lineWidth = Math.max(1, 1.5 * z);
+    g.strokeStyle = 'rgba(120,105,80,0.55)'; g.lineWidth = Math.max(1, 1.5 * z * S);
     for (let i = 1; i <= 4; i++) { const [x0, y0] = P(1920 + i * 5, 6 + i * 3), [x1, y1] = P(1920 + i * 5, 1074 + i * 3); g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke(); const [x2, y2] = P(-1920 - i * 5, 6 + i * 3), [x3, y3] = P(-1920 - i * 5, 1074 + i * 3); g.beginPath(); g.moveTo(x2, y2); g.lineTo(x3, y3); g.stroke(); }
   }
   const th = Math.PI * ss(pr(t, TURN[0], TURN[1]));
@@ -86,8 +90,8 @@ function drawBook(g, t, cx, cy, z) {
   if (turning) {
     // 下一页上的投影
     const edgeX = 1920 * Math.cos(th);
-    if (th < Math.PI / 2) { const [ex] = P(Math.max(0, edgeX), 0), [sx0, sy0] = P(0, 0), [, sy1] = P(0, 1080); const gr = g.createLinearGradient(ex, 0, ex + 260 * z * (1 - Math.cos(th)), 0); gr.addColorStop(0, `rgba(30,20,10,${0.35 * Math.sin(th)})`); gr.addColorStop(1, 'rgba(30,20,10,0)'); g.fillStyle = gr; const [rx] = P(1920, 0); g.fillRect(sx0, sy0, rx - sx0, sy1 - sy0); }
-    else { const [lx, ly0] = P(-1920, 0), [, ly1] = P(0, 1080), [ex] = P(Math.min(0, edgeX), 0); const gr = g.createLinearGradient(ex, 0, ex - 260 * z * (1 + Math.cos(th)), 0); gr.addColorStop(0, `rgba(30,20,10,${0.35 * Math.sin(th)})`); gr.addColorStop(1, 'rgba(30,20,10,0)'); g.fillStyle = gr; const [sx0] = P(0, 0); g.fillRect(lx, ly0, sx0 - lx, ly1 - ly0); }
+    if (th < Math.PI / 2) { const [ex] = P(Math.max(0, edgeX), 0), [sx0, sy0] = P(0, 0), [, sy1] = P(0, 1080); const gr = g.createLinearGradient(ex, 0, ex + 260 * z * S * (1 - Math.cos(th)), 0); gr.addColorStop(0, `rgba(30,20,10,${0.35 * Math.sin(th)})`); gr.addColorStop(1, 'rgba(30,20,10,0)'); g.fillStyle = gr; const [rx] = P(1920, 0); g.fillRect(sx0, sy0, rx - sx0, sy1 - sy0); }
+    else { const [lx, ly0] = P(-1920, 0), [, ly1] = P(0, 1080), [ex] = P(Math.min(0, edgeX), 0); const gr = g.createLinearGradient(ex, 0, ex - 260 * z * S * (1 + Math.cos(th)), 0); gr.addColorStop(0, `rgba(30,20,10,${0.35 * Math.sin(th)})`); gr.addColorStop(1, 'rgba(30,20,10,0)'); g.fillStyle = gr; const [sx0] = P(0, 0); g.fillRect(lx, ly0, sx0 - lx, ly1 - ly0); }
     // 翻起的那页：48 条竖条，每条自己的角度（外缘滞后 = 纸的弯曲）+ 透视放大
     const N = 64;
     const strips = [];
@@ -98,30 +102,30 @@ function drawBook(g, t, cx, cy, z) {
       const front = Math.cos(ang(um)) > 0;
       strips.push({ i, u0, u1, x0, x1, h, front, a: ang(um), aA: ang(u0), aB: ang(u1) });
     }
-    strips.forEach(S => {
+    strips.forEach(ST => {
       // 每条竖条用仿射变换贴成平行四边形：左右两边各有自己的透视高度，上下边连续
-      const hA = S.u0 * Math.sin(S.aA), hB = S.u1 * Math.sin(S.aB);
+      const hA = ST.u0 * Math.sin(ST.aA), hB = ST.u1 * Math.sin(ST.aB);
       const fA = D / (D - hA), fB = D / (D - hB);
-      const [XA, YA0] = toS(S.x0, 0, cx, cy, z, fA), [, YA1] = toS(S.x0, 1080, cx, cy, z, fA);
-      const [XB, YB0] = toS(S.x1, 0, cx, cy, z, fB);
+      const [XA, YA0] = toS(ST.x0, 0, cx, cy, z, fA), [, YA1] = toS(ST.x0, 1080, cx, cy, z, fA);
+      const [XB, YB0] = toS(ST.x1, 0, cx, cy, z, fB);
       if (Math.abs(XB - XA) < 0.2) return;
-      const src = S.front ? pageR.c : pageBack.c;
-      const sw = 1920 / N, scol = S.front ? S.u0 : 1920 - S.u1;
+      const src = ST.front ? pageR.c : pageBack.c;
+      const sw = 1920 / N, scol = ST.front ? ST.u0 : 1920 - ST.u1;
       g.save();
-      // 源条的左边 → (XA, YA0..YA1)，右边 → (XB, YB0..)
-      if (S.front) g.setTransform((XB - XA) / sw, (YB0 - YA0) / sw, 0, (YA1 - YA0) / 1080, XA, YA0);
+      // 源条的左边 → (XA, YA0..YA1)，右边 → (XB, YB0..)；源是整帧大小的页纹理，取「装入区」子矩形。
+      if (ST.front) g.setTransform((XB - XA) / sw, (YB0 - YA0) / sw, 0, (YA1 - YA0) / 1080, XA, YA0);
       else g.setTransform((XA - XB) / sw, (YA0 - YB0) / sw, 0, (YA1 - YA0) / 1080, XB, YB0);
-      g.drawImage(src, scol, 0, sw, 1080, 0, 0, sw * 1.04, 1080);
-      const shade = S.front ? 0.28 * Math.sin(S.a) * (0.6 + 0.4 * S.u0 / 1920) : 0.16 * Math.abs(Math.cos(S.a));
+      g.drawImage(src, OX + scol * S, OY, sw * S, 1080 * S, 0, 0, sw * 1.04, 1080);
+      const shade = ST.front ? 0.28 * Math.sin(ST.a) * (0.6 + 0.4 * ST.u0 / 1920) : 0.16 * Math.abs(Math.cos(ST.a));
       g.fillStyle = `rgba(40,28,15,${shade})`; g.fillRect(0, 0, sw * 1.04, 1080);
       g.restore();
     });
   }
   // 中缝阴影
-  const [gx] = P(0, 0), [, gy0] = P(0, 0), [, gy1] = P(0, 1080), gw = 200 * z;
+  const [gx] = P(0, 0), [, gy0] = P(0, 0), [, gy1] = P(0, 1080), gw = 200 * z * S;
   const gr = g.createLinearGradient(gx - gw, 0, gx + gw, 0);
   gr.addColorStop(0, 'rgba(60,40,20,0)'); gr.addColorStop(0.42, 'rgba(60,40,20,0.12)'); gr.addColorStop(0.5, 'rgba(50,32,15,0.34)'); gr.addColorStop(0.58, 'rgba(60,40,20,0.12)'); gr.addColorStop(1, 'rgba(60,40,20,0)');
-  g.fillStyle = gr; g.globalAlpha = k; g.fillRect(gx - gw, gy0 - 6 * z, gw * 2, gy1 - gy0 + 12 * z); g.globalAlpha = 1;
+  g.fillStyle = gr; g.globalAlpha = k; g.fillRect(gx - gw, gy0 - 6 * z * S, gw * 2, gy1 - gy0 + 12 * z * S); g.globalAlpha = 1;
 }
 // 平躺的一页：靠近中缝的几条略微抬起（页面弧度）并变暗
 function flatPage(g, src, side, P, k) {
@@ -132,21 +136,26 @@ function flatPage(g, src, side, P, k) {
     const xa = side > 0 ? u0 : -u1, xb = side > 0 ? u1 : -u0;
     const [X0, Y0] = P(xa, -lift), [X1, Y1] = P(xb, 1080 + lift * 0.3);
     const scol = side > 0 ? u0 : 1920 - u1;
-    g.drawImage(src, scol, 0, 1920 / N, 1080, X0, Y0, X1 - X0 + 0.6, Y1 - Y0);
+    g.drawImage(src, OX + scol * S, OY, (1920 / N) * S, 1080 * S, X0, Y0, X1 - X0 + 0.6 * S, Y1 - Y0);
   }
 }
 function rr(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
 
 // —— 木桌：赭石打底 + 棕色交叉排线 + 木纹 + 木板缝 ——
+// 桌面是"满帧背景"（等同全屏叠加）：铺满当前帧的可见世界范围，否则 9:16 的上下留白会露纸。
+// 16:9 时 min/max/floor/round 取到的仍是原来那几个数 ⇒ 行数与每行参数逐字节不变。
 function drawDesk(Dk) {
-  const R = [[-2600, -1000], [2600, -1000], [2600, 2100], [-2600, 2100]];
+  const hx = (W / 2) / CAM.s, hy = (H / 2) / CAM.s;
+  const RX0 = Math.min(-2600, CAM.x - hx - 200), RX1 = Math.max(2600, CAM.x + hx + 200);
+  const RY0 = Math.min(-1000, CAM.y - hy - 200), RY1 = Math.max(2100, CAM.y + hy + 200);
+  const R = [[RX0, RY0], [RX1, RY0], [RX1, RY1], [RX0, RY1]];
   fill(Dk.f, R, { col: K.ochre, p: 0.9, gap: 13, w: 16, ang: 0.08, seed: 700, over: 0 });
   fill(Dk.f, R, { col: K.brown, p: 0.5, gap: 18, w: 16, ang: -0.06, seed: 701, over: 0 });
-  for (let i = 0; i < 26; i++) {
-    const y0 = -1000 + i * 120 + hash(i) * 40; const pts = []; for (let x = -2600; x <= 2600; x += 100) pts.push([x, y0 + 16 * Math.sin(x * 0.0021 + i) + 8 * Math.sin(x * 0.009 + i * 2)]);
+  for (let i = Math.floor((RY0 + 1000) / 120); -1000 + i * 120 <= RY1; i++) {
+    const y0 = -1000 + i * 120 + hash(i) * 40; const pts = []; for (let x = RX0; x <= RX1; x += 100) pts.push([x, y0 + 16 * Math.sin(x * 0.0021 + i) + 8 * Math.sin(x * 0.009 + i * 2)]);
     line(Dk.l, pts, { w: 5, col: K.brown, p: 0.7, seed: 710 + i, wob: 2 });
   }
-  for (let j = 0; j < 5; j++) { const y = -760 + j * 700; line(Dk.l, [[-2600, y], [2600, y + 6]], { w: 6, col: K.ink, p: 0.45, seed: 750 + j }); }
+  for (let j = Math.round((RY0 + 760) / 700); -760 + j * 700 <= RY1; j++) { const y = -760 + j * 700; line(Dk.l, [[RX0, y], [RX1, y + 6]], { w: 6, col: K.ink, p: 0.45, seed: 750 + j }); }
   [[-2250, 1500], [2300, -500], [-1500, -700]].forEach(([x, y], i) => line(Dk.l, ellipse(x, y, 60, 24, 24), { w: 5, col: K.brown, p: 0.8, seed: 760 + i }));
 }
 // —— 蜡笔（顶视：包纸 + 磨圆的笔头）、平头刷、洗笔水 ——

@@ -11,9 +11,13 @@ Model: --model (or the WHISPER_MODEL environment variable; a model name, or a lo
       If base mishears a line that sounds right to you, check again with --model small (more accurate, about 480 MB, several times slower).
       The first run downloads from Hugging Face (base / base.en ≈ 145 MB); behind a firewall set HF_ENDPOINT=https://hf-mirror.com,
       or download the model beforehand and pass --model /path/to/model-dir.
+★ Offline first (prefer local compute; do not fetch the model from the internet on every render): if the model is already in the local
+  HF cache, set HF_HUB_OFFLINE=1 and run — no more calls to huggingface.co to validate (measured on the same clip: 145.9s → 2.9s,
+  words.json byte-identical); if it is not cached, say so **explicitly** and fall back to online, never silently hang on SYN-SENT.
+  Switch LEMO_ASR_OFFLINE: auto (default) / 1 force offline (fail fast if missing) / 0 force online.
 Exit codes: 0 all lines pass; 1 some lines differ; 2 the check could not run (model failed to load, etc.).
 """
-import sys, json, re, os, argparse, difflib, unicodedata
+import sys, json, re, os, glob, argparse, difflib, unicodedata
 
 CJK = re.compile('[㐀-鿿豈-﫿぀-ヿ가-힯]')
 CHAR_LANGS = {'zh', 'ja', 'ko'}           # 这些语言按字符比，其余按词比
@@ -77,7 +81,52 @@ def compare(want, got, lang, threshold=0.92):
     return a == b, 1.0 if a == b else difflib.SequenceMatcher(None, a, b).ratio()
 
 
+def _hub_cache_dir():
+    """HF 的 hub 缓存根（口径与 huggingface_hub 默认一致：HUGGINGFACE_HUB_CACHE > HF_HOME/hub > ~/.cache/huggingface/hub）"""
+    return (os.environ.get('HUGGINGFACE_HUB_CACHE')
+            or os.path.join(os.environ.get('HF_HOME') or os.path.expanduser('~/.cache/huggingface'), 'hub'))
+
+
+def _cached_locally(name):
+    """模型是否已经在本地 HF 缓存里 —— 这就是「能不能离线跑」的判据。"""
+    if os.path.isdir(name):
+        return True                                   # 本地目录：永远不需要联网
+    repo = name if '/' in name else 'Systran/faster-whisper-' + name
+    for snap in glob.glob(os.path.join(_hub_cache_dir(), 'models--' + repo.replace('/', '--'), 'snapshots', '*')):
+        for f in ('model.bin', 'model.safetensors'):
+            p = os.path.join(snap, f)
+            if os.path.exists(p) and os.path.getsize(p) > 0:
+                return True
+    return False
+
+
+def go_offline_if_possible(name):
+    """离线优先：模型已在本地 ⇒ 设 HF_HUB_OFFLINE=1。
+    ★ 必须在 `from faster_whisper import WhisperModel` **之前**调用（huggingface_hub 在 import 时读这个变量）。
+    为什么值得做：HF 不可达时它仍会先去连 huggingface.co，一路 SYN-SENT 到超时才回退本地缓存
+    —— engraving 4 行素材实测 145.9s，设离线后 2.9s，产物一模一样。
+    本地没有 ⇒ **明确提示**再回退联网（不因设了离线就崩，也不静默挂）。
+    开关 LEMO_ASR_OFFLINE：auto（默认）/ 1 强制离线（缓存缺失即快速失败）/ 0 强制联网。"""
+    pref = (os.environ.get('LEMO_ASR_OFFLINE') or 'auto').strip().lower()
+    if pref in ('0', 'false', 'no', 'online'):
+        return 'online'
+    if _cached_locally(name):
+        os.environ['HF_HUB_OFFLINE'] = '1'            # faster-whisper 只走 huggingface_hub，这一个就够
+        print(f"asr_check.py: model '{name}' is in the local cache → offline (HF_HUB_OFFLINE=1), no network", file=sys.stderr)
+        return 'offline'
+    if pref in ('1', 'true', 'yes', 'on', 'offline'):
+        print(f"asr_check.py: LEMO_ASR_OFFLINE=1 but the model '{name}' is not in the local cache "
+              f"({_hub_cache_dir()}). Download it once, or pass --model /path/to/model-dir.", file=sys.stderr)
+        sys.exit(2)
+    print(f"asr_check.py: the model '{name}' is NOT in the local cache ({_hub_cache_dir()}) → fetching it from "
+          f"huggingface.co now (needs a working network, and can take a while if that host is blocked).\n"
+          f"  To avoid this next time: pre-download it, pass --model /path/to/model-dir, or set "
+          f"HF_ENDPOINT=https://hf-mirror.com", file=sys.stderr)
+    return 'online'
+
+
 def load_model(name):
+    go_offline_if_possible(name)
     try: from faster_whisper import WhisperModel
     except ImportError: sys.exit('asr_check.py: faster-whisper is missing: install the voice tier: sh plugin/skills/lemo-opuscar/scripts/setup.sh deps voice')
     try:

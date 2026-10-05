@@ -3,7 +3,9 @@ import * as T from './toon.js';
 import { P, mug, cube } from './chars.js';
 const Q = new URLSearchParams(location.search), MODE = Q.get('mode') || 'film';
 const cv = document.getElementById('c');
-const CW = +(Q.get('w') || 1920), CH = +(Q.get('h') || 1080);
+// 输出尺寸 = 视口尺寸（渲染器截的是浏览器**视口**，不是 canvas）：canvas 必须跟着视口走，
+// 否则 `--size/--ratio` 只会把 1920×1080 的画面裁掉一块；版面由 film.js 的 post() 首行 setFrame() 按实际帧重排。
+const CW = +(Q.get('w') || window.innerWidth || 1920), CH = +(Q.get('h') || window.innerHeight || 1080);
 cv.width = CW; cv.height = CH; cv.style.width = CW + 'px'; cv.style.height = CH + 'px';
 T.init(cv);
 
@@ -47,7 +49,7 @@ if (MODE === 'film') {
       sg.save(); sg.fillStyle = '#F1EEE6'; sg.font = '28px Limelight'; sg.textAlign = 'center'; sg.fillText('A  RUBBER  HOSE  CARTOON', 960, 1018); sg.restore();
     }
     const f = Math.round(t * 24), jump = cutAt.some(c => c > 0 && Math.abs(Math.round(c * 24) - f) === 0) ? 3 : 0;   // 剪接处片门跳一下
-    post(F, t, { jump });
+    post(F, t, { jump, W: CW, H: CH });
   };
   window.DUR = ST.DUR;
   window.SUBS = ST.SUBS.map(s => ({ t0: s[0], t1: s[1], text: s[2] }));

@@ -6,7 +6,27 @@ import { PAL, setClock, shape, plane, ink, rays, ellipse, rect, rrect, spline, m
 import { drawOwner, drawPip, drawDock, drawHand, armJoints } from './engine/chars.js';
 import { icon } from './engine/icons.js';
 
-const W = 1920, H = 1080;
+// 帧尺寸不是常量：渲染器截的是浏览器**视口**，`--size/--ratio` 会改它。NATIVE 是设计帧（1920×1080）。
+// renderFilm 首行按实际帧调 setFrame()，版面从这里按实际帧重排：
+//   · 世界层（相机里的色面/道具/主讲人）经 dXf 把设计帧「等比装入」当前帧，相机 zoom ×S ⇒ 世界坐标不用改；
+//   · 贴着世界内容的屏幕家什（步骤头、细节标签、圆形特写、勋章、信头字）走同一个 dXf ⇒ 自动对齐、自动 ×S；
+//   · 贴画面边的字幕卡与全屏叠加（虹膜、色块划像、纸纹）贴当前帧（位置 ×FX/×FY、尺寸/字号/线宽 ×S）⇒ 能盖满整帧。
+// 1920×1080 时 FX = FY = S = 1、偏移 0 ⇒ 每个表达式都退化成它替换掉的那个数字，16:9 逐字节不变。
+// 顶层不许算几何：W/H/FX/FY/S 只在 setFrame() 里被赋值。
+export const NATIVE = { W: 1920, H: 1080 };
+export let W = NATIVE.W, H = NATIVE.H, FX = 1, FY = 1, S = 1;
+export function setFrame(w, h) { W = w; H = h; FX = w / NATIVE.W; FY = h / NATIVE.H; S = Math.min(FX, FY); }
+// 设计帧(1920×1080) → 当前帧的「等比装入」变换（中心对齐、紧轴缩放 S）。屏幕空间家什也走它才能与相机里的世界内容对齐。
+function dXf(ctx) { ctx.setTransform(S, 0, 0, S, (W - NATIVE.W * S) / 2, (H - NATIVE.H * S) / 2); }
+// 设计帧坐标 → 当前帧像素（全屏叠加要贴当前帧时用）
+const dPt = (x, y) => [(W - NATIVE.W * S) / 2 + S * x, (H - NATIVE.H * S) / 2 + S * y];
+// 虹膜收束/张开到最大时，盖满当前帧的半径（16:9 时恒等于设计值 1250）
+const COVER = () => Math.max(1250 * S, Math.hypot(W, H) / 2 + 40);
+
+// FILM_META.aspects —— 这部影片**真的能正确构图**的输出比例清单（**字面量**：控制台按源码文本探测，
+// 不是求值，见 D:\lemo-tools\lib\aspects.mjs）。不写 = 只支持 16:9（= 没改造过，按 1920×1080 绝对像素构图、给别的尺寸会被裁）。
+export const FILM_META = { id: 'meet-pip', title: 'Meet Pip', style: 'Mid-century Cartoon', aspects: ['16:9', '9:16'] };
+
 export const BPM = 132, BEAT = 60 / BPM, BAR = BEAT * 4;
 let C = null, D = {}, T = null, COL = null, EVS = [];
 
@@ -22,17 +42,17 @@ export function setup(content, durs) {
   COL = { paper: p.paper || PAL.paper, ink: p.ink || PAL.ink, product: p.product || PAL.teal, productD: p.productDark || PAL.tealD, accent: p.accent || PAL.coral,
     hook: p.hook || PAL.mustard, steps: p.steps || [PAL.blue, PAL.mustard, PAL.avocado, PAL.pink, PAL.plum], tip: p.tip || PAL.pink };
   const vd = k => D[k] ?? estimate(k);
-  const S = []; let bar = 0;
-  const add = (kind, bars, extra = {}) => { S.push({ kind, t0: bar * BAR, t1: (bar + bars) * BAR, bar0: bar, bars, ...extra }); bar += bars; };
+  const SEC = []; let bar = 0;   // 原名 S，与上面派生的紧轴缩放 S 重名 → 改名 SEC
+  const add = (kind, bars, extra = {}) => { SEC.push({ kind, t0: bar * BAR, t1: (bar + bars) * BAR, bar0: bar, bars, ...extra }); bar += bars; };
   add('hook', 4);
   const n = C.steps.length;
   C.steps.forEach((s, i) => add('step', i === n - 1 ? 2 : Math.max(3, Math.ceil((vd('step' + i) + 1.6) / BAR)), { i, last: i === n - 1 }));
   add('payoff', 3); add('tip', 2); add('lockup', 3); add('end', 2);
-  T = { S, dur: bar * BAR };
+  T = { S: SEC, dur: bar * BAR };
   // voice cues: each step's line opens half a beat before its iris (J-cut)
   const V = [];
-  V.push({ id: 'hook', t: S[0].t0 + BAR + 0.16 });
-  S.filter(s => s.kind === 'step').forEach(s => V.push({ id: 'step' + s.i, t: s.t0 - BEAT * 0.5 }));
+  V.push({ id: 'hook', t: SEC[0].t0 + BAR + 0.16 });
+  SEC.filter(s => s.kind === 'step').forEach(s => V.push({ id: 'step' + s.i, t: s.t0 - BEAT * 0.5 }));
   V.push({ id: 'tip', t: sec('tip').t0 + 0.08 });
   V.push({ id: 'outro', t: sec('lockup').t0 + BEAT + 0.08 });
   V.forEach(v => { v.dur = vd(v.id); v.text = lineOf(v.id); });
@@ -55,24 +75,29 @@ export function events() { return EVS; }
 const ev = (t, type, o = {}) => EVS.push({ t: +t.toFixed(4), type, ...o });
 
 // ------------------------------------------------------------------ helpers
-function cam(ctx, cx, cy, z = 1, r = 0) { ctx.translate(W / 2, H / 2); ctx.scale(z, z); ctx.rotate(r); ctx.translate(-cx, -cy); }
-const w2s = (x, y, c) => { const dx = x - c.cx, dy = y - c.cy, co = Math.cos(c.r || 0), si = Math.sin(c.r || 0); return [W / 2 + c.z * (co * dx - si * dy), H / 2 + c.z * (si * dx + co * dy)]; };
-function bg(ctx, col) { ctx.fillStyle = col; ctx.fillRect(-4000, -4000, 9920, 9080); }
+// 相机：世界点 (cx,cy) 放到画面中心、缩放 z（紧轴缩放 S 由外层 dXf 提供 ⇒ 竖屏把整张设计帧装进来、全图可见）。
+// 1920×1080 时 dXf 恒等、NATIVE.W/2 = 960 ⇒ 与改造前逐字节相同。
+function cam(ctx, cx, cy, z = 1, r = 0) { ctx.translate(NATIVE.W / 2, NATIVE.H / 2); ctx.scale(z, z); ctx.rotate(r); ctx.translate(-cx, -cy); }
+// 世界 → 设计帧屏幕坐标（外层 dXf 再把它映到当前帧）
+const w2s = (x, y, c) => { const dx = x - c.cx, dy = y - c.cy, co = Math.cos(c.r || 0), si = Math.sin(c.r || 0); return [NATIVE.W / 2 + c.z * (co * dx - si * dy), NATIVE.H / 2 + c.z * (si * dx + co * dy)]; };
+// 底色是「帧」空间：整幅都要铺到（竖屏上下不是黑边，而是与场景同色的留白）
+function bg(ctx, col) { const m = ctx.getTransform(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = col; ctx.fillRect(0, 0, W, H); ctx.setTransform(m); }
 const B = (s, b) => s.t0 + b * BEAT;          // absolute time of beat b in section s
 const pop = (t, t0, d = 0.28) => back(seg(t, t0, t0 + d), 1.9);
 function blinkAt(u, ts) { return ts.some(b => u > b && u < b + 0.13) ? 1 : 0; }
 const colsOf = () => ({ product: COL.product, productD: COL.productD });
 
-// 1950s caption card
+// 1950s caption card —— 字幕卡是「帧」空间的家什（贴当前帧下沿、居中），所以位置按 FX/FY、字号/尺寸/线宽按 S
 function subtitle(ctx, t) {
   const cue = subs().find(s => t >= s.t0 && t < s.t1); if (!cue) return;
   const a = Math.min(ss(seg(t, cue.t0, cue.t0 + 0.16)), 1 - ss(seg(t, cue.t1 - 0.16, cue.t1)));
-  const f = fit(ctx, cue.text, '500 {px}px Jost', 42, 1280, 1, 30);
-  const w = measure(ctx, f.lines[0], f.font) + 120, h = 78, x = W / 2 - w / 2, y = H - 60 - h;
-  ctx.save(); ctx.globalAlpha = a; ctx.translate(0, (1 - a) * 10);
-  shape(ctx, rrect(x, y, w, h, 12), { fill: COL.paper, line: 3.2, seed: 901, grain: 0.15, breaks: 0.08, off: [5, 5] });
-  star(ctx, x + 30, y + h / 2, 14, { n: 8, inner: 0.4, fill: COL.accent, off: [0, 0], rot: t * 0.8 });
-  star(ctx, x + w - 30, y + h / 2, 14, { n: 8, inner: 0.4, fill: COL.accent, off: [0, 0], rot: -t * 0.8 });
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+  const f = fit(ctx, cue.text, '500 {px}px Jost', 42 * S, 1280 * S, 1, 30 * S);
+  const w = measure(ctx, f.lines[0], f.font) + 120 * S, h = 78 * S, x = W / 2 - w / 2, y = H - 60 * FY - h;
+  ctx.globalAlpha = a; ctx.translate(0, (1 - a) * 10 * S);
+  shape(ctx, rrect(x, y, w, h, 12 * S), { fill: COL.paper, line: 3.2 * S, seed: 901, grain: 0.15, breaks: 0.08, off: [5 * S, 5 * S] });
+  star(ctx, x + 30 * S, y + h / 2, 14 * S, { n: 8, inner: 0.4, fill: COL.accent, off: [0, 0], rot: t * 0.8 });
+  star(ctx, x + w - 30 * S, y + h / 2, 14 * S, { n: 8, inner: 0.4, fill: COL.accent, off: [0, 0], rot: -t * 0.8 });
   text(ctx, f.lines[0], W / 2, y + h / 2 + f.px * 0.34, { font: f.font, fill: COL.ink, align: 'center' });
   ctx.restore();
 }
@@ -132,7 +157,7 @@ function sceneHook(ctx, t, s) {
   bg(ctx, COL.hook);
   ctx.save();
   const c = hookCam(u, s.t1 - s.t0); cam(ctx, c.cx, c.cy, c.z);
-  plane(ctx, rect(-300, FY - 4, W + 600, 700), tint(COL.hook, 0.35), { grain: 0.3 });
+  plane(ctx, rect(-300, FY - 4, NATIVE.W + 600, 700), tint(COL.hook, 0.35), { grain: 0.3 });
   ink(ctx, [[120, FY - 4], [1820, FY - 6]], 4, { breaks: 0.35, seed: 5, taper: true });
   const sb = back(seg(u, 3 * BEAT - 0.05, 3 * BEAT + 0.32), 1.6);
   if (sb > 0) {
@@ -188,7 +213,7 @@ function sceneHook(ctx, t, s) {
   ctx.restore();
   // lettering: layer 1 = product name, layer 2 = title
   const k1 = seg(u, 4 * BEAT, 4 * BEAT + 0.55);
-  if (k1 > 0) { ctx.save(); ctx.beginPath(); ctx.rect(0, 0, 130 + 760 * eo(k1), H); ctx.clip();
+  if (k1 > 0) { ctx.save(); ctx.beginPath(); ctx.rect(0, 0, 130 + 760 * eo(k1), NATIVE.H); ctx.clip();
     text(ctx, C.hook.kicker, 130, 300, { font: '700 176px Oleo', fill: COL.ink, plate: PAL.white, off: [7, 7], rot: -0.06, maxW: 760 }); ctx.restore(); }
   const k2 = back(seg(u, 6 * BEAT, 6 * BEAT + 0.3)), k3 = back(seg(u, 8 * BEAT, 8 * BEAT + 0.3));
   if (k2 > 0) {
@@ -381,12 +406,12 @@ function actPress(ctx, t, s, st, col) {
   ctx.save(); cam(ctx, c.cx, c.cy, c.z);
   // a flat radial floor + rays for the close-up
   rays(ctx, 960, 760, 28, 1400, tint(col, 0.25), { rot: u * 0.05, alpha: 0.6 });
-  const PX = 960, PY = 808, S = 2.3;
+  const PX = 960, PY = 808, PS = 2.3;   // 原名 S（Pip 的放大倍数），与派生的紧轴缩放 S 重名 → 改名 PS
   const hover = Math.sin(u * 5) * 6;
   const tPress = b(5), pre = ss(seg(t, b(3.8), b(4.6))), down = eio(seg(t, b(4.75), tPress)), rel = ss(seg(t, B(s, 8) - 0.02, B(s, 8) + 0.18));
   const pressed = t >= tPress && t < B(s, 8) + 0.05;
-  const btn = [PX - 6 * S, PY - (56 + 4) * S];
-  drawPip(ctx, PX, PY, { s: S, light: t >= B(s, 8) ? 1 : 0, press: pressed ? 1 : 0, colors: colsOf() });
+  const btn = [PX - 6 * PS, PY - (56 + 4) * PS];
+  drawPip(ctx, PX, PY, { s: PS, light: t >= B(s, 8) ? 1 : 0, press: pressed ? 1 : 0, colors: colsOf() });
   // hold ring: fills over two beats while held
   const hk = seg(t, tPress, tPress + 2 * BEAT);
   if (hk > 0) {
@@ -491,7 +516,7 @@ function buildPath() {
     perim.forEach(([x, y]) => lineTo(x, y, Math.ceil(Math.hypot(x - pts[pts.length - 1][0], y - pts[pts.length - 1][1]) / 10)));
     marks['perim' + zi] = cum();
     // 2. lanes: boustrophedon, bottom -> top, bending round furniture; every turn is a small loop (the print's motif)
-    const narrow = z.x1 - z.x0 < 400, S = 82, n = narrow ? 0 : Math.max(3, Math.floor((Bt - Tp - 60) / S) | 1);
+    const narrow = z.x1 - z.x0 < 400, LANE = 82, n = narrow ? 0 : Math.max(3, Math.floor((Bt - Tp - 60) / LANE) | 1);   // 原名 S，与派生的紧轴缩放 S 重名 → 改名 LANE
     const gap = (Bt - Tp - 60) / (n - 1);
     let first = true;
     if (narrow) { // a hall: two straight lanes up and down, a curl at the top turn
@@ -702,27 +727,27 @@ function sceneLockup(ctx, t, s) {
   bg(ctx, COL.paper);
   // a thin lace of the route along the bottom edge (low contrast)
   const BY = 1034;
-  plane(ctx, rect(0, BY, W, H - BY), tint(COL.tip, 0.35), { grain: 0.25 });
-  const lace = []; for (let x = -20; x <= W + 20; x += 6) lace.push([x, BY + 23 + Math.sin(x / 34) * 9]);
+  plane(ctx, rect(0, BY, NATIVE.W, NATIVE.H - BY), tint(COL.tip, 0.35), { grain: 0.25 });
+  const lace = []; for (let x = -20; x <= NATIVE.W + 20; x += 6) lace.push([x, BY + 23 + Math.sin(x / 34) * 9]);
   ink(ctx, move(lace, 3, 3), 6, { color: tint(COL.accent, 0.35), taper: false, seed: 331 });
-  for (let x = 30; x < W; x += 107) sparkle(ctx, x, BY + 24, 8, { fill: tint(COL.ink, 0.45) });
-  ink(ctx, [[-10, BY], [W + 10, BY]], 3.5, { seed: 330, breaks: 0.12 });
+  for (let x = 30; x < NATIVE.W; x += 107) sparkle(ctx, x, BY + 24, 8, { fill: tint(COL.ink, 0.45) });
+  ink(ctx, [[-10, BY], [NATIVE.W + 10, BY]], 3.5, { seed: 330, breaks: 0.12 });
   // title block slams on beat 4
   const kt = pop(t, b(3), 0.3);
   if (kt > 0) {
-    ctx.save(); ctx.translate(W / 2, 200); ctx.scale(kt, kt); ctx.translate(-W / 2, -200);
-    text(ctx, C.hook.kicker, W / 2, 124, { font: '700 76px Oleo', fill: COL.accent, align: 'center', rot: -0.03, maxW: 900 });
+    ctx.save(); ctx.translate(NATIVE.W / 2, 200); ctx.scale(kt, kt); ctx.translate(-NATIVE.W / 2, -200);
+    text(ctx, C.hook.kicker, NATIVE.W / 2, 124, { font: '700 76px Oleo', fill: COL.accent, align: 'center', rot: -0.03, maxW: 900 });
     const f = fit(ctx, C.title, '{px}px Slab', 76, 1400, 1, 50);
-    text(ctx, f.lines[0], W / 2, 214, { font: f.font, fill: COL.ink, plate: COL.hook, off: [5, 4], align: 'center' });
-    text(ctx, C.subtitle.toUpperCase(), W / 2, 272, { font: '600 30px Jost', fill: COL.ink, align: 'center', track: 9 });
+    text(ctx, f.lines[0], NATIVE.W / 2, 214, { font: f.font, fill: COL.ink, plate: COL.hook, off: [5, 4], align: 'center' });
+    text(ctx, C.subtitle.toUpperCase(), NATIVE.W / 2, 272, { font: '600 30px Jost', fill: COL.ink, align: 'center', track: 9 });
     ctx.restore();
   }
   // steps land one per beat (their chords come back)
   const n = C.steps.length, span = Math.min(1500, 430 * n), R = n > 3 ? 88 : 104, cy = 440;
   for (let i = 0; i < n; i++) {
-    const cx = W / 2 - span / 2 + span * (i + 0.5) / n, k = pop(t, s.t0 + i * BEAT * (n > 3 ? 0.75 : 1), 0.26);
+    const cx = NATIVE.W / 2 - span / 2 + span * (i + 0.5) / n, k = pop(t, s.t0 + i * BEAT * (n > 3 ? 0.75 : 1), 0.26);
     if (k <= 0) continue;
-    if (i > 0) { const px = W / 2 - span / 2 + span * (i - 0.5) / n; arrow(ctx, [px + R + 28, cy - 24], [cx - R - 34, cy - 24], { u: eo(seg(t, s.t0 + i * BEAT, s.t0 + i * BEAT + 0.3)), bob: ((t / BEAT) + i * 0.5) % 1, bend: -0.3, w: 5, head: 26, fill: COL.accent, dashedShaft: true, seed: 340 + i }); }
+    if (i > 0) { const px = NATIVE.W / 2 - span / 2 + span * (i - 0.5) / n; arrow(ctx, [px + R + 28, cy - 24], [cx - R - 34, cy - 24], { u: eo(seg(t, s.t0 + i * BEAT, s.t0 + i * BEAT + 0.3)), bob: ((t / BEAT) + i * 0.5) % 1, bend: -0.3, w: 5, head: 26, fill: COL.accent, dashedShaft: true, seed: 340 + i }); }
     medallion(ctx, i, cx, cy, R, k);
     ctx.save(); ctx.globalAlpha = clamp(k);
     const tf = fit(ctx, C.steps[i].title, '600 {px}px Jost', 40, span / n - 40, 2, 26), ty = cy + R + 62;
@@ -735,8 +760,8 @@ function sceneLockup(ctx, t, s) {
   const kr = pop(t, b(3.5), 0.3);
   if (kr > 0) {
     const tf = fit(ctx, C.tip.text, '500 {px}px Jost', 38, 860, 1, 26);
-    const tw = measure(ctx, tf.lines[0], tf.font) + 240, tx = W / 2 - tw / 2, ty = 734, th = 88;
-    ctx.save(); ctx.translate(W / 2, ty + th / 2); ctx.scale(kr, kr); ctx.translate(-W / 2, -(ty + th / 2));
+    const tw = measure(ctx, tf.lines[0], tf.font) + 240, tx = NATIVE.W / 2 - tw / 2, ty = 734, th = 88;
+    ctx.save(); ctx.translate(NATIVE.W / 2, ty + th / 2); ctx.scale(kr, kr); ctx.translate(-NATIVE.W / 2, -(ty + th / 2));
     shape(ctx, [[tx - 34, ty], [tx + tw + 34, ty], [tx + tw + 6, ty + th / 2], [tx + tw + 34, ty + th], [tx - 34, ty + th], [tx - 6, ty + th / 2]], { fill: COL.tip, line: 4, seed: 350, off: [6, 5], grain: 0.25 });
     star(ctx, tx + 66, ty + th / 2, 50, { n: 12, inner: 0.64, fill: COL.accent, line: 3, off: [0, 0], rot: u * 0.3 });
     text(ctx, (C.tip.label || 'Tip').toUpperCase(), tx + 66, ty + th / 2 + 9, { font: '25px Slab', fill: PAL.white, align: 'center', maxW: 70 });
@@ -748,8 +773,8 @@ function sceneLockup(ctx, t, s) {
   if (kc > 0) {
     const cf = fit(ctx, C.outro.cta, '500 {px}px Jost', 28, 900, 1, 20), cw = measure(ctx, cf.lines[0], cf.font) + 60;
     ctx.save(); ctx.globalAlpha = clamp(kc);
-    shape(ctx, rrect(W / 2 - cw / 2, 858, cw, 54, 27), { fill: COL.ink, line: 0, off: [0, 0], grain: 0.1 });
-    text(ctx, cf.lines[0], W / 2, 894, { font: cf.font, fill: COL.paper, align: 'center' });
+    shape(ctx, rrect(NATIVE.W / 2 - cw / 2, 858, cw, 54, 27), { fill: COL.ink, line: 0, off: [0, 0], grain: 0.1 });
+    text(ctx, cf.lines[0], NATIVE.W / 2, 894, { font: cf.font, fill: COL.paper, align: 'center' });
     ctx.restore();
   }
   // the cast, fully in frame: June presents from the left, Pip on its starburst at the right
@@ -776,34 +801,37 @@ function sceneEnd(ctx, t, s) {
   const close = eio(seg(t, s.t0, b(1.2)));
   if (close < 1) {
     sceneLockup(ctx, t, lk);
-    const r = lerp(2300, 70, close);
-    ctx.save(); ctx.fillStyle = COL.ink; ctx.beginPath(); ctx.rect(-10, -10, W + 20, H + 20); ctx.arc(1680, 880, r, 0, TAU, true); ctx.fill(); ctx.restore();
-    ink(ctx, ellipse(1680, 880, r, r, 80), 5, { closed: true, color: COL.paper, seed: 950 });
+    // 收束遮罩是「全屏叠加」：贴当前帧（矩形铺满当前帧、圆心取世界 Pip 映射后的当前帧点、半径 ×S）
+    const r = lerp(2300, 70, close) * S, c = dPt(1680, 880);
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = COL.ink; ctx.beginPath(); ctx.rect(-10, -10, W + 20, H + 20); ctx.arc(c[0], c[1], r, 0, TAU, true); ctx.fill(); ctx.restore();
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ink(ctx, ellipse(c[0], c[1], r, r, 80), 5, { closed: true, color: COL.paper, seed: 950 }); ctx.restore();
     return;
   }
   bg(ctx, COL.ink);
   const k = back(seg(t, b(1.5), b(2.3)), 1.4), R = 450 * k;
   if (R <= 1) { shape(ctx, ellipse(1680, 880, 70 * (1 - seg(t, b(1.2), b(1.5))), 70 * (1 - seg(t, b(1.2), b(1.5))), 40), { fill: COL.paper, line: 0, off: [0, 0], grain: 0 }); return; }
-  shape(ctx, ellipse(W / 2, H / 2, R, R, 90), { fill: COL.paper, line: 0, grain: 0.2, off: [0, 0] });
-  ink(ctx, ellipse(W / 2, H / 2, R + 18, R + 18, 90), 4, { closed: true, color: COL.paper, seed: 951, breaks: 0.3 });
+  // 片尾卡：居中于**设计帧**（经 dXf 落到当前帧中心、尺寸 ×S）——16:9 时恒等于原坐标
+  shape(ctx, ellipse(NATIVE.W / 2, NATIVE.H / 2, R, R, 90), { fill: COL.paper, line: 0, grain: 0.2, off: [0, 0] });
+  ink(ctx, ellipse(NATIVE.W / 2, NATIVE.H / 2, R + 18, R + 18, 90), 4, { closed: true, color: COL.paper, seed: 951, breaks: 0.3 });
   const ka = seg(t, b(2.2), b(2.8));
   if (ka <= 0) return;
   ctx.save(); ctx.globalAlpha = ka;
   const F = C.film || {};
-  text(ctx, F.name || C.hook.kicker, W / 2, 380, { font: '700 96px Oleo', fill: COL.ink, plate: COL.hook, off: [5, 4], align: 'center', maxW: 760 });
-  text(ctx, (F.style || '').toUpperCase(), W / 2, 450, { font: '600 28px Jost', fill: COL.accent, align: 'center', track: 8 });
-  ink(ctx, [[W / 2 - 150, 490], [W / 2 + 150, 490]], 3, { seed: 952, breaks: 0.2 });
-  text(ctx, 'Lemo-Opuscar', W / 2, 560, { font: '44px Slab', fill: COL.ink, align: 'center' });
-  text(ctx, 'LemoLab × Claude Opus 5.5', W / 2, 612, { font: '500 32px Jost', fill: COL.ink, align: 'center' });
+  text(ctx, F.name || C.hook.kicker, NATIVE.W / 2, 380, { font: '700 96px Oleo', fill: COL.ink, plate: COL.hook, off: [5, 4], align: 'center', maxW: 760 });
+  text(ctx, (F.style || '').toUpperCase(), NATIVE.W / 2, 450, { font: '600 28px Jost', fill: COL.accent, align: 'center', track: 8 });
+  ink(ctx, [[NATIVE.W / 2 - 150, 490], [NATIVE.W / 2 + 150, 490]], 3, { seed: 952, breaks: 0.2 });
+  text(ctx, 'Lemo-Opuscar', NATIVE.W / 2, 560, { font: '44px Slab', fill: COL.ink, align: 'center' });
+  text(ctx, 'LemoLab × Claude Opus 5.5', NATIVE.W / 2, 612, { font: '500 32px Jost', fill: COL.ink, align: 'center' });
   const cf = fit(ctx, F.credits || '', '400 {px}px Jost', 21, 620, 4, 16);
-  cf.lines.forEach((l, i) => text(ctx, l, W / 2, 668 + i * cf.px * 1.35, { font: cf.font, fill: PAL.inkSoft, align: 'center' }));
-  drawPip(ctx, W / 2, 882, { view: 'top', s: 0.34, ang: -Math.PI / 2, colors: colsOf() });
+  cf.lines.forEach((l, i) => text(ctx, l, NATIVE.W / 2, 668 + i * cf.px * 1.35, { font: cf.font, fill: PAL.inkSoft, align: 'center' }));
+  drawPip(ctx, NATIVE.W / 2, 882, { view: 'top', s: 0.34, ang: -Math.PI / 2, colors: colsOf() });
   ctx.restore();
 }
 
 // ------------------------------------------------------------------ renderer + transitions
 function drawSection(ctx, t, s) {
   ctx.save();
+  dXf(ctx);   // 世界层 + 贴世界内容的屏幕家什：设计帧(1920×1080)「等比装入」当前帧（16:9 时恒等）
   let r = {};
   if (s.kind === 'hook') r = sceneHook(ctx, t, s);
   else if (s.kind === 'step') r = sceneStep(ctx, t, s);
@@ -814,9 +842,11 @@ function drawSection(ctx, t, s) {
   ctx.restore();
   return r || {};
 }
-export function renderFilm(ctx, t, Q) {
+export function renderFilm(ctx, t, Q, frame) {
+  // 帧尺寸由调用方（视口）定：渲染器截的是浏览器**视口**，`--size/--ratio` 会改它。首行 setFrame ⇒ 版面按实际帧重排。
+  setFrame((frame && frame.W) || ctx.canvas.width || NATIVE.W, (frame && frame.H) || ctx.canvas.height || NATIVE.H);
   setClock(t);
-  const S = T.S, idx = S.indexOf(section(t)), s = S[idx], nx = S[idx + 1], pv = S[idx - 1];
+  const SEC = T.S, idx = SEC.indexOf(section(t)), s = SEC[idx], nx = SEC[idx + 1], pv = SEC[idx - 1];
   ctx.save();
   // 1) iris through the step medallion: [next.t0 - 0.5 beat, next.t0 + 0.4 beat]
   const irisOut = nx && nx.kind === 'step' && t >= nx.t0 - BEAT * 0.5 ? nx : null;
@@ -824,23 +854,26 @@ export function renderFilm(ctx, t, Q) {
   const pressIris = s.kind === 'payoff' && t < s.t0 + 0.28;
   const blockIn = (s.kind === 'tip' && t < s.t0 + 0.3) || (s.kind === 'lockup' && t < s.t0 + 0.2);
   if (irisOut || irisIn) {
-    const inc = irisOut || irisIn, prev = S[S.indexOf(inc) - 1];
+    const inc = irisOut || irisIn, prev = SEC[SEC.indexOf(inc) - 1];
     const k = eio(seg(t, inc.t0 - BEAT * 0.5, inc.t0 + BEAT * 0.4));
-    const f = drawSection(ctx, Math.min(t, inc.t0 - 1e-3), prev).focus || [W / 2, H / 2];
-    const cx = lerp(f[0], W / 2, k), cy = lerp(f[1], H / 2, k), r = lerp(104, 1250, k * k);
+    // 焦点是**世界/设计帧**坐标 ⇒ 经 dPt 换到当前帧；虹膜是「全屏叠加」⇒ 半径从 104×S 张到能盖满当前帧的 COVER()
+    const f = dPt(...(drawSection(ctx, Math.min(t, inc.t0 - 1e-3), prev).focus || [NATIVE.W / 2, NATIVE.H / 2]));
+    const p1 = dPt(NATIVE.W / 2, NATIVE.H / 2);
+    const cx = lerp(f[0], p1[0], k), cy = lerp(f[1], p1[1], k), r = lerp(104 * S, COVER(), k * k);
     ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.clip(); drawSection(ctx, Math.max(t, inc.t0 + 1e-3), inc); ctx.restore();
     ink(ctx, ellipse(cx, cy, r, r, 90), 7, { closed: true, seed: 960 });
     if (k < 0.5) { ctx.save(); ctx.globalAlpha = 1 - k * 2; ctx.translate(cx, cy); ctx.scale(1 + k * 3, 1 + k * 3);
-      text(ctx, String(inc.i + 1), 0, 104 * 0.38, { font: `${114}px Slab`, fill: COL.ink, plate: PAL.white, off: [5, 5], align: 'center' }); ctx.restore(); }
+      text(ctx, String(inc.i + 1), 0, 104 * 0.38 * S, { font: `${114 * S}px Slab`, fill: COL.ink, plate: PAL.white, off: [5 * S, 5 * S], align: 'center' }); ctx.restore(); }
   } else if (pressIris) {
     // the start button opens into the plan (circle to circle)
-    const prev = pv, f = drawSection(ctx, prev.t1 - 1e-3, prev).btn || [W / 2, H / 2];
+    const prev = pv, f = dPt(...(drawSection(ctx, prev.t1 - 1e-3, prev).btn || [NATIVE.W / 2, NATIVE.H / 2]));
+    const p1 = dPt(NATIVE.W / 2, NATIVE.H / 2);
     const k = eio(seg(t, s.t0, s.t0 + 0.28));
-    const cx = lerp(f[0], W / 2, k), cy = lerp(f[1], H / 2, k), r = lerp(40, 1250, k * k);
+    const cx = lerp(f[0], p1[0], k), cy = lerp(f[1], p1[1], k), r = lerp(40 * S, COVER(), k * k);
     ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.clip(); drawSection(ctx, t, s); ctx.restore();
     ink(ctx, ellipse(cx, cy, r, r, 90), 7, { closed: true, seed: 961 });
   } else if (blockIn) {
-    // colour block wipe: tip slides in from the right; the lockup paper rises from the bottom
+    // colour block wipe: tip slides in from the right; the lockup paper rises from the bottom（划像块按**当前帧**铺满）
     const d = s.kind === 'tip' ? 0.3 : 0.2, k = eio(seg(t, s.t0, s.t0 + d));
     drawSection(ctx, pv.t1 - 1e-3, pv);
     ctx.save(); ctx.beginPath();
@@ -856,13 +889,13 @@ export function renderFilm(ctx, t, Q) {
 // ------------------------------------------------------------------ sound events (same times drive the pictures)
 function buildEvents() {
   EVS = [];
-  const S = T.S;
+  const SEC = T.S;   // 原名 S，与派生的紧轴缩放 S 重名 → 改名 SEC
   T.V.forEach(v => ev(v.t, 'vo', { id: v.id }));
-  const h = S[0]; const hb = x => B(h, x);
+  const h = SEC[0]; const hb = x => B(h, x);
   ev(0.0, 'creak', { pan: -0.3 }); ev(hb(1) - 0.02, 'box_thump', { pan: -0.35, pitch: 0 }); ev(hb(2) - 0.02, 'box_thump', { pan: 0.35, pitch: 1 });
   ev(hb(3), 'box_fall', {}); ev(hb(4), 'ding', { gain: 0.8 }); ev(hb(4) + 0.34, 'plastic_land', {});
   ev(hb(6), 'wood_tick', {}); ev(hb(4) + 0.02, 'pen_write', { dur: 0.55 });
-  S.forEach((s, k) => {
+  SEC.forEach((s, k) => {
     const b = x => B(s, x);
     if (s.kind === 'step') {
       ev(s.t0 - BEAT, 'stamp', {}); ev(s.t0 - BEAT * 0.5, 'whoosh', { dur: 0.4 });

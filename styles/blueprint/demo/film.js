@@ -2,6 +2,16 @@
 import { W, H, g, f, ov, setCam, clear, proj, nibs, line, text, dim, LW, FONT, rect, circ, fillV, S, cam, fxWet, fxShadow, knock, TAU, NIBS, lw, trunc, xf } from './draw.js';
 import { drawMachine, drawGarden, flower, explodePaths, G, X, M } from './machine.js';
 import { SW, SH, TB, border, header, titleBlock, partsList, notes, revCloud, revImprint, cloudLobes, handShadow, stamp, makeDrops, rain, wrap } from './sheet.js';
+
+// 帧尺寸不是常量：渲染器截的是浏览器**视口**，`--size/--ratio` 会改它。本片所有绘制都在**设计帧**
+// （1920×1080 = draw.js 的 W/H，也就是 ink/fx/ov 三张画布的尺寸）里，**不改**；适配 9:16 的「设计帧 → 当前帧
+// 等比装入」落在合成着色器（paper.js）里：main.js 把画布设成视口尺寸，着色器按紧轴缩放 fitS 把设计帧装入，
+// 纸面在其四周继续延伸（露出更多纸面，不裁不变形）。1920×1080 时 fitS = 0 ⇒ 着色器走原式，逐字节不变。
+export const NATIVE = { W: 1920, H: 1080 };
+
+// FILM_META.aspects —— 这部影片**真的能正确构图**的输出比例清单（**字面量**：控制台按源码文本探测，
+// 不是求值，见 D:\lemo-tools\lib\aspects.mjs）。不写 = 只支持 16:9（= 没改造过、按 1920×1080 绝对像素构图）。
+export const FILM_META = { id: 'the-cloud-catcher', title: 'The Cloud Catcher', style: 'Blueprint', aspects: ['16:9', '9:16'] };
 const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
 const lerp = (a, b, t) => a + (b - a) * t;
 const seg = (t, a, b) => clamp((t - a) / (b - a));

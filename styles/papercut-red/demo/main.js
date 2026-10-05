@@ -11,9 +11,15 @@ import { drawSubs, textPiece } from './hud.js';
 import { sawRow, swirl, crescent, rosette, plum } from './motifs.js';
 import { T, DUR, VO, SHOTS, shotAt } from './story.js';
 import { clamp, lerp, seg, ss, eio, eo, ei, back, hash, vnoise, track } from '/core/lib.js';
+import { W, H, FX, FY, S as FS, setFrame, frX, frY, fitM, ctxX, ctxY, fcanvas, FILM_META } from './film.js';
 
 const qs = new URLSearchParams(location.search);
 const cv = document.getElementById('cv'), g = cv.getContext('2d');
+// 输出尺寸 = 视口尺寸（渲染器截的是浏览器**视口**，不是 canvas）。canvas 必须跟着视口走，
+// 否则 --size/--ratio 只会把 1920×1080 的画面裁掉一块；版面由 setFrame() 按实际帧重排。
+const VW = window.innerWidth, VH = window.innerHeight;
+cv.width = VW; cv.height = VH;
+setFrame(VW, VH);
 await document.fonts.load('600 40px "Fraunces"'); await document.fonts.load('800 40px "Fraunces"'); await document.fonts.load('700 40px "Fraunces"'); await document.fonts.load('italic 500 40px "Fraunces"');
 await document.fonts.load('400 40px "Ma Shan Zheng"', '年剪纸窗花红');
 const TEST = qs.get('test');
@@ -21,17 +27,18 @@ if (TEST) {
   const m = await import('./test.js');
   window.DUR = 1; window.render = t => m.test(g, TEST, t, qs); window.READY = true;
 }
-const W = 1920, H = 1080;
 let DURS = {}; try { const r = await fetch('voices/dur.json'); if (r.ok) DURS = await r.json(); } catch (e) { }
 const E_ = (t, a, b) => ss(seg(t, a, b));
 const st = t => Math.floor(t * 12) / 12;         // 角色 12 fps 步进
-const cam = (x, y, z) => [z, 0, 0, z, 960 - x * z, 540 - y * z];
+// 相机：把 S 折进 zoom（世界与家什同一套等比装入），设计帧中心 (960,540) → 当前帧中心 (W/2,H/2)。
+// 1920×1080 时 S = 1、W/2 = 960、H/2 = 540 ⇒ 与改造前逐字节相同。
+const cam = (x, y, z) => [z * FS, 0, 0, z * FS, W / 2 - x * z * FS, H / 2 - y * z * FS];
 const lerpA = (a, b, u) => a.map((v, i) => lerp(v, b[i], u));
 function mix(A, B, u) { const o = { ...A }; for (const k of Object.keys(B)) { const a = A[k], b = B[k]; if (typeof a === 'number' && typeof b === 'number') o[k] = lerp(a, b, u); else o[k] = u < .5 ? (a ?? b) : b; } return o; }
 kit(); buildGirl(); buildNian();
 const FLOWER = tuanhua(1.4), HOLES = tuanhuaHoles(1);
 const SPOT = (() => { const [c, q] = canvas(256, 256), gr = q.createRadialGradient(128, 128, 0, 128, 128, 128); gr.addColorStop(0, '#fff'); gr.addColorStop(.55, 'rgba(255,255,255,.75)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); q.fillStyle = gr; q.fillRect(0, 0, 256, 256); return { c, x0: -1, y0: -1, w: 2, h: 2 }; })();
-const [TCc, TC] = canvas(W, H), [OCc, OC] = canvas(W, H);
+const [TCc, TC] = fcanvas(), [OCc, OC] = fcanvas();
 
 // ===================== 字幕 =====================
 const SUBS = VO.map((v, i) => {
@@ -62,7 +69,7 @@ function shotMacro(g, t, piecesOnly = false) {
   const u = macroProg(t), tip = pathPt(MAC.path, u);
   const cx = lerp(1000, tip.p[0], .35), cy = lerp(620, tip.p[1], .35), z = 1.25 - .1 * seg(t, 0, 2.4);
   const C = cam(cx, cy, z);
-  if (!piecesOnly) { g.save(); g.setTransform(1, 0, 0, 1, 0, 0); fillPaper(g, 'rice', 0, 0, W, H, [z * 1.6, 0, 0, z * 1.6, C[4], C[5]]); g.restore(); }
+  if (!piecesOnly) { g.save(); g.setTransform(1, 0, 0, 1, 0, 0); fillPaper(g, 'rice', 0, 0, W, H, [C[0] * 1.6, 0, 0, C[0] * 1.6, C[4], C[5]]); g.restore(); }
   const pts = MAC.path, done = pts.slice(0, tip.i + 1).concat([tip.p]);
   const A = pts.concat([[2140, -300], [440, -300], [440, 1300]]), B = pts.concat([[2140, 1600], [440, 1600], [440, 1300]]);
   const fly = E_(t, T.lift, T.lift + .55);
@@ -110,19 +117,18 @@ function drawTitleCard(g, t) {
   buildTitle();
   g.save(); g.setTransform(1, 0, 0, 1, 0, 0); fillPaper(g, 'rice', 0, 0, W, H); g.restore();
   const t0 = T.title, pop = (i, d = .06) => { const u = st(t - t0 - i * d); return u < 0 ? 0 : u < .09 ? 1.18 : 1; };
-  // 上下锯齿条
+  // 上下锯齿条（当前帧家什：位置 ×FX/×FY、尺寸 ×S）
   const sl = E_(t, t0, t0 + .35);
-  put(g, TITLE.top, [1, 0, 0, 1, 310 - (1 - sl) * 1500, 150], { shadow: 1 });
-  put(g, TITLE.top, [1, 0, 0, -1, 310 + (1 - sl) * 1500, 930], { shadow: 1 });
+  put(g, TITLE.top, [FS, 0, 0, FS, frX(310 - (1 - sl) * 1500), frY(150)], { shadow: 1 });
+  put(g, TITLE.top, [FS, 0, 0, -FS, frX(310 + (1 - sl) * 1500), frY(930)], { shadow: 1 });
   let x = 960 - TITLE.w1 / 2;
-  TITLE.l1.forEach((p, i) => { const s = pop(i); if (s) put(g, p, [s, 0, 0, s, x + (1 - s) * p.w / 2, 250 + (1 - s) * p.h / 2], { shadow: 1.4 }); x += p.w - 20 + 6; });
+  TITLE.l1.forEach((p, i) => { const s = pop(i); if (s) put(g, p, [s * FS, 0, 0, s * FS, frX(x + (1 - s) * p.w / 2), frY(250 + (1 - s) * p.h / 2)], { shadow: 1.4 }); x += p.w - 20 + 6; });
   x = 960 - TITLE.w2 / 2;
-  TITLE.l2.forEach((p, i) => { const s = pop(i + 4, .04); if (s) put(g, p, [s, 0, 0, s, x, 590], { shadow: 1.1 }); x += p.w - 20 + 2; });
+  TITLE.l2.forEach((p, i) => { const s = pop(i + 4, .04); if (s) put(g, p, [s * FS, 0, 0, s * FS, frX(x), frY(590)], { shadow: 1.1 }); x += p.w - 20 + 2; });
   // 两侧小团花 + 印章
-  const fs = pop(4, 0) ? 1 : 0;
-  if (t > t0 + .5) { const r = (t - t0) * .08; for (const [fx, d] of [[260, 1], [1660, -1]]) put(g, TITLE.flower, mul([1, 0, 0, 1, fx, 420], mul(R(r * d), S(.3))), { shadow: 1 }); }
-  if (t > t0 + .95) { const u = st(t - t0 - .95), s = u < .09 ? 1.5 : 1; put(g, TITLE.seal, [s, 0, 0, s, 1330 - 55 * (s - 1), 700 - 55 * (s - 1)], { shadow: 1 }); }
-  if (t > t0 + 1.2) { g.save(); g.globalAlpha = E_(t, t0 + 1.2, t0 + 1.6); g.font = 'italic 500 36px "Fraunces"'; g.fillStyle = '#5a1a12'; g.textAlign = 'center'; g.fillText('a red paper-cut tale for New Year’s Eve', 960, 770); g.restore(); }
+  if (t > t0 + .5) { const r = (t - t0) * .08; for (const [fx, d] of [[260, 1], [1660, -1]]) put(g, TITLE.flower, mul([1, 0, 0, 1, frX(fx), frY(420)], mul(R(r * d), S(.3 * FS))), { shadow: 1 }); }
+  if (t > t0 + .95) { const u = st(t - t0 - .95), s = u < .09 ? 1.5 : 1; put(g, TITLE.seal, [s * FS, 0, 0, s * FS, frX(1330 - 55 * (s - 1)), frY(700 - 55 * (s - 1))], { shadow: 1 }); }
+  if (t > t0 + 1.2) { g.save(); g.globalAlpha = E_(t, t0 + 1.2, t0 + 1.6); g.font = `italic 500 ${36 * FS}px "Fraunces"`; g.fillStyle = '#5a1a12'; g.textAlign = 'center'; g.fillText('a red paper-cut tale for New Year’s Eve', frX(960), frY(770)); g.restore(); }
 }
 function shotTitle(g, t) {
   if (t < T.titleFold) { drawTitleCard(g, t); if (t < T.lift + .56) shotMacro(g, t, true); return; }
@@ -130,12 +136,12 @@ function shotTitle(g, t) {
   shotVillage(g, Math.max(T.village, t));
   drawTitleCard(TC, t);
   const u = seg(t, T.titleFold, T.titleFold + .38), s = Math.cos(Math.PI * eio(u)), slide = ei(seg(t, T.titleFold + .3, T.village - .02));
-  const ox = -slide * 1100;
+  const ox = -slide * 1100 * FS, HW = W / 2;
   g.save(); g.setTransform(1, 0, 0, 1, ox, 0); g.shadowColor = 'rgba(0,0,0,.45)'; g.shadowBlur = 20; g.shadowOffsetX = 6; g.shadowOffsetY = 8;
-  g.drawImage(TCc, 0, 0, 960, H, 0, 0, 960, H); g.restore();
-  g.save(); g.setTransform(s, 0, 0, 1, 960 + ox, 0);
-  if (s > 0) { g.drawImage(TCc, 960, 0, 960, H, 0, 0, 960, H); g.fillStyle = `rgba(40,20,10,${.35 * (1 - s)})`; g.fillRect(0, 0, 960, H); }
-  else { fillPaper(g, 'rice', 0, 0, 960, H, [1, 0, 0, 1, 0, 0], `rgba(120,90,60,${.15 + .2 * (1 + s)})`); }
+  g.drawImage(TCc, 0, 0, HW, H, 0, 0, HW, H); g.restore();
+  g.save(); g.setTransform(s, 0, 0, 1, HW + ox, 0);
+  if (s > 0) { g.drawImage(TCc, HW, 0, HW, H, 0, 0, HW, H); g.fillStyle = `rgba(40,20,10,${.35 * (1 - s)})`; g.fillRect(0, 0, HW, H); }
+  else { fillPaper(g, 'rice', 0, 0, HW, H, [1, 0, 0, 1, 0, 0], `rgba(120,90,60,${.15 + .2 * (1 + s)})`); }
   g.restore();
 }
 
@@ -208,26 +214,27 @@ function roomBg(g, C, warm) {
 function shotEye(g, t) {
   buildRoom();
   beginLight('rgb(170,176,220)');
+  // 本镜全在设计帧里（不经过相机）⇒ 一切走等比装入：位置 frX/frY、尺寸 ×FS（fitM 折进仿射矩阵）。
   const WX = [500, 140, 920, 760];
   // 墙
   g.save(); g.setTransform(1, 0, 0, 1, 0, 0); fillPaper(g, 'indigo', 0, 0, W, H, [1, 0, 0, 1, 0, 0], 'rgba(6,8,22,.45)');
   // 窗外：夜空 + 远处黑下来的村子 + 年兽的眼
-  g.beginPath(); g.rect(...WX); g.clip();
+  g.beginPath(); g.rect(frX(WX[0]), frY(WX[1]), (WX[2] - WX[0]) * FS, (WX[3] - WX[1]) * FS); g.clip();
   fillPaper(g, 'ink', 0, 0, W, H);
-  const kk = kit().night; put(g, kk.mid, [.5, 0, 0, .5, 900, 900], { shadow: .6 });
-  for (let i = 0; i < 4; i++) { const hp = kk.houses[i]; g.save(); put(g, hp, [.42, 0, 0, .42, 600 + i * 230, 915], { shadow: .5 }); g.fillStyle = '#0c1024'; g.restore(); }
+  const kk = kit().night; put(g, kk.mid, fitM([.5, 0, 0, .5, 900, 900]), { shadow: .6 });
+  for (let i = 0; i < 4; i++) { const hp = kk.houses[i]; g.save(); put(g, hp, fitM([.42, 0, 0, .42, 600 + i * 230, 915]), { shadow: .5 }); g.fillStyle = '#0c1024'; g.restore(); }
   const inX = eo(seg(t, T.room + .15, T.room + .8)), out = ei(seg(t, 19.0, 19.5));
   const kz = 2.6 * HS, tx = 960 + 252 * kz + 1500 * (1 - inX) - 1700 * out, ty = 520 + 166 * kz + 18 * Math.sin(t * 1.7);
   const Np = buildNian(), blink = t > T.blink && t < T.blink + .22;
-  put(g, Np.mane, [kz, 0, 0, kz, tx, ty], { shadow: 1.2 });
-  put(g, Np.head[blink ? 'blink' : 'normal'], [kz, 0, 0, kz, tx, ty], { shadow: 1.2 });
+  put(g, Np.mane, fitM([kz, 0, 0, kz, tx, ty]), { shadow: 1.2 });
+  put(g, Np.head[blink ? 'blink' : 'normal'], fitM([kz, 0, 0, kz, tx, ty]), { shadow: 1.2 });
   g.restore();
-  put(g, ROOM.frame, [1, 0, 0, 1, 960, 520], { shadow: 1.4 });
-  put(g, ROOM.sill, [1, 0, 0, 1, 960, 912], { shadow: 1.2 });
+  put(g, ROOM.frame, fitM([1, 0, 0, 1, 960, 520]), { shadow: 1.4 });
+  put(g, ROOM.sill, fitM([1, 0, 0, 1, 960, 912]), { shadow: 1.2 });
   // 前景：女孩缩在窗台下，只露出头顶和眼睛
   const peek = E_(t, 17.25, 17.55) * (1 - .6 * E_(t, 18.35, 18.6));
-  drawGirl(g, [2.25, 0, 0, 2.25, 330, 1980 - 250 * peek], { expr: 'scared', head: -.06, shF: -2.3, elF: -1.1, shB: -2.1, elB: -1.2 });
-  pool(960, 480, 800, 'rgba(170,180,240,1)', .3);
+  drawGirl(g, fitM([2.25, 0, 0, 2.25, 330, 1980 - 250 * peek]), { expr: 'scared', head: -.06, shF: -2.3, elF: -1.1, shB: -2.1, elB: -1.2 });
+  pool(frX(960), frY(480), 800 * FS, 'rgba(170,180,240,1)', .3);
   applyLight(g);
 }
 // ===================== S6 下决心 =====================
@@ -248,9 +255,9 @@ function shotDecide(g, t) {
   if (t > T.light) {
     const fk = Math.floor(t * 12) % 3, fl = ROOM.flame[fk], ig = st(t - T.light) < .09 ? 1.6 : 1;
     put(E, fl, mul(cm, S(ig)), { shadow: 0 }); put(g, fl, mul(cm, S(ig)), { shadow: 0 });
-    const c = ap(cm, [0, -20]); pool(c[0], c[1], 1300, 'rgba(255,190,115,1)', .95 * lit); lightRect(q => { q.setTransform(...cm); q.ellipse(0, -24, 16, 46, 0, 0, 7); });
+    const c = ap(cm, [0, -20]); pool(c[0], c[1], 1300 * FS, 'rgba(255,190,115,1)', .95 * lit); lightRect(q => { q.setTransform(...cm); q.ellipse(0, -24, 16, 46, 0, 0, 7); });
   }
-  pool(300, 200, 900, 'rgba(150,165,235,1)', .35);   // 窗外夜光
+  pool(frX(300), frY(200), 900 * FS, 'rgba(150,165,235,1)', .35);   // 窗外夜光
   const e = t < T.red - .35 ? 'scared' : t < T.noise + .15 ? 'surprise' : 'determined';
   const nod = t > T.nod && t < T.nod + .35 ? Math.sin(seg(t, T.nod, T.nod + .35) * Math.PI) * .2 : 0;
   const look = t > T.red - .35 ? .08 : -.08;
@@ -272,7 +279,8 @@ function shotPaste(g, t) {
   const u = E_(st(t), T.bloom + .25, T.paste), sw = st(t);
   const pose = mix({ expr: 'determined', lean: -.02, shF: -1.45, elF: -.3, shB: -1.3, elB: -.35, handF: 'flat', handB: 'flat', head: -.05 }, { expr: 'smile', lean: -.06, shF: -1.85, elF: -.2, shB: -1.7, elB: -.25, handF: 'flat', handB: 'flat', head: -.22 }, u);
   const r = drawGirl(g, mul(C, mul(Tm(720, 1250), S(2.4))), pose);
-  const fp = lerpA([r.joints.hand[0] + 60, r.joints.hand[1] - 90], [1320, 470], u), fs = lerp(.55, .74, u);
+  // r.joints 已是**当前帧**坐标；终点 (1320,470) 是设计帧的窗心 ⇒ 走 frX/frY；尺寸 ×FS。
+  const fp = lerpA([r.joints.hand[0] + 60 * FS, r.joints.hand[1] - 90 * FS], [frX(1320), frY(470)], u), fs = lerp(.55, .74, u) * FS;
   const pat = t > T.paste && t < T.paste + .15 ? 1.03 : 1;
   put(g, FLOWER, [fs * pat, 0, 0, fs * pat, fp[0], fp[1]], { shadow: 1 + 3 * (1 - u) });
   // 桌上蜡烛在身后
@@ -280,7 +288,7 @@ function shotPaste(g, t) {
   put(g, ROOM.candle, mul(C, mul(Tm(360, 975), S(1.3))), { shadow: 1.2 });
   const cm = mul(C, mul(Tm(360, 975 - 143 * 1.3), S(1.3))), fl = ROOM.flame[Math.floor(t * 12) % 3];
   put(g, fl, cm, { shadow: 0 }); put(E, fl, cm, { shadow: 0 });
-  pool(360, 780, 1500, 'rgba(255,186,110,1)', .85); lightRect(q => { q.setTransform(...cm); q.ellipse(0, -20, 14, 40, 0, 0, 7); });
+  pool(frX(360), frY(780), 1500 * FS, 'rgba(255,186,110,1)', .85); lightRect(q => { q.setTransform(...cm); q.ellipse(0, -20, 14, 40, 0, 0, 7); });
   applyLight(g); bloom(g, .5);
 }
 // ===================== S9 满村红 =====================
@@ -337,15 +345,15 @@ function shotNianClose(g, t) {
     hero: 'flower', heroI: 1.1, nianDark: 'rgb(150,126,172)', bloom: .5,
     nian: ctx => (NM = drawNian(ctx, mul(C, mul(Tm(700, 900), mul(S(1.2), Tm(0, -NJ.ground)))), { ...pose, flip: true }, { shadow: 1.6 })),
     sky: gg => fireworks(gg, C, t, [[33.6, 2000, -80, .45], [34.5, 1750, -220, .35]]),
-    lights: () => { pool(2100, 420, 1300, 'rgba(255,170,100,1)', .7); },
+    lights: () => { pool(frX(2100), frY(420), 1300 * FS, 'rgba(255,170,100,1)', .7); },
     after: (gg) => {
       const fc = ap(NM.M.head, [-420, -30]), k = C[0] * .5, ec = ap(NM.M.head, [-280, -120]);
       addMasked(gg, SPOT, [340 * C[0], 0, 0, 300 * C[0], ec[0], ec[1]], NLc, 'rgb(255,120,70)', .75);
       const PM = [k, .05 * k, -.04 * k, k * .97, fc[0], fc[1]];
       addMasked(gg, HOLES, PM, NLc, 'rgb(255,200,140)', .85, .5);
       addMasked(gg, HOLES, PM, NLc, 'rgb(255,110,50)', .4, 6);
-      // 光从右边窗口来：一道暖色斜光
-      gg.save(); gg.setTransform(1, 0, 0, 1, 0, 0); gg.globalCompositeOperation = 'lighter'; const gr = gg.createLinearGradient(1920, 400, 900, 300); gr.addColorStop(0, 'rgba(255,170,90,.22)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); gg.fillStyle = gr; gg.fillRect(0, 0, 1920, 1080); gg.restore();
+      // 光从右边窗口来：一道暖色斜光（全屏叠加 ⇒ 位置 ×FX/×FY、铺满视口）
+      gg.save(); gg.setTransform(1, 0, 0, 1, 0, 0); gg.globalCompositeOperation = 'lighter'; const gr = gg.createLinearGradient(ctxX(1920), ctxY(400), ctxX(900), ctxY(300)); gr.addColorStop(0, 'rgba(255,170,90,.22)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); gg.fillStyle = gr; gg.fillRect(0, 0, W, H); gg.restore();
     },
     front: (gg) => { crackers(gg, C, t, 1750, 560, 34.05, 12, 1.4); crackers(gg, C, t, 1450, 640, 34.55, 10, 1.2); }
   });
@@ -368,7 +376,7 @@ function shotFlee(g, t) {
   });
 }
 // ===================== S10 天亮 =====================
-const [NCc, NC] = canvas(W, H);
+const [NCc, NC] = fcanvas();
 function sun(g, C, t) {
   const u = eo(seg(t, T.sunUp - .4, T.asleep)), c = ap(C, [1500, 560 - 330 * u]), r = 120 * C[0] / .62 * .6;
   g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.translate(c[0], c[1]);
@@ -386,16 +394,17 @@ function shotDawn(g, t) {
   if (u < 1) {
     // 夜纸从右上角揭起：折线 x - y = m，m 从 1940 扫到 -1100
     drawVillage(NC, C, T.dawn, { hero: 'flower', heroI: 1, snow: true });
-    const m = lerp(1940, -1100, u);
-    g.save(); g.beginPath(); trace(g, [[-3000, -3000 - m], [3000, 3000 - m], [-3000, 3000]]); g.clip(); g.drawImage(NCc, 0, 0); g.restore();
-    let poly = [[0, 0], [1920, 0], [1920, 1080], [0, 1080]], out = [];
+    // 揭纸是全屏叠加：折线 x − y = m 要扫过整幅当前帧（16:9 时 W+20 = 1940、−(H+20) = −1100，与改造前同）。
+    const m = lerp(W + 20, -(H + 20), u), BIG = W + H;
+    g.save(); g.beginPath(); trace(g, [[-BIG, -BIG - m], [BIG, BIG - m], [-BIG, BIG]]); g.clip(); g.drawImage(NCc, 0, 0); g.restore();
+    let poly = [[0, 0], [W, 0], [W, H], [0, H]], out = [];
     const f = p => p[0] - p[1] - m;
     for (let i = 0; i < poly.length; i++) { const A = poly[i], B = poly[(i + 1) % poly.length], fa = f(A), fb = f(B); if (fa >= 0) out.push(A); if ((fa >= 0) !== (fb >= 0)) { const k = fa / (fa - fb); out.push([A[0] + (B[0] - A[0]) * k, A[1] + (B[1] - A[1]) * k]); } }
     if (out.length > 2) {
       const fl = out.map(([x, y]) => [y + m, x - m]);
       g.save(); g.shadowColor = 'rgba(10,6,20,.55)'; g.shadowBlur = 30; g.shadowOffsetX = -10; g.shadowOffsetY = 14;
       g.beginPath(); trace(g, fl); g.fillStyle = '#56639c'; g.fill(); g.restore();
-      g.save(); g.beginPath(); trace(g, fl); g.clip(); fillPaper(g, 'indigo', 0, 0, 1920, 1080, [1, 0, 0, 1, 0, 0], 'rgba(140,155,210,.45)'); g.restore();
+      g.save(); g.beginPath(); trace(g, fl); g.clip(); fillPaper(g, 'indigo', 0, 0, W, H, [1, 0, 0, 1, 0, 0], 'rgba(140,155,210,.45)'); g.restore();
     }
   }
 }
@@ -414,11 +423,11 @@ function shotAsleep(g, t) {
   const tb = ROOM.tableDay || (ROOM.tableDay = piece([-800, -30, 800, 300], q => { fill(q, qq => trace(qq, Pl([[-800, -24], [800, -24], [800, 300], [-800, 300]], true, .6, 9)), '#b8191b'); sawRow(q, [[-790, 8], [790, 8]], 12, 14, 1, .7); }, { ss: 1, seed: 151 }));
   put(g, tb, mul(C, Tm(760, 930)), { shadow: 1.5 });
   drawScissors(g, mul(C, mul(Tm(1110, 915), S(2.4))), .15, .12, { shadow: 1.2 });
-  pool(1290, 420, 1300, 'rgba(255,236,200,1)', .3);
+  pool(frX(1290), frY(420), 1300 * FS, 'rgba(255,236,200,1)', .3);
   applyLight(g); bloom(g, .3);
 }
 // ===================== S11 尺度揭示 =====================
-const [SCc, SC] = canvas(W, H);
+const [SCc, SC] = fcanvas();
 const REAL = {};
 function buildReal() {
   if (REAL.wood) return;
@@ -451,56 +460,58 @@ function realScissors(g, x, y, s, a) {
 function shotReveal(g, t) {
   buildReal();
   const u = eio(seg(t, T.reveal + .1, 45.6)), k = lerp(1.55, .42, u);
-  // 1) 渲染白天的村子（窗花内容）
+  // 1) 渲染白天的村子（窗花内容）：离屏画布跟当前帧同尺寸，用折了 S 的相机 ⇒ 竖屏下村子同样居中不裁。
   dayScene(SC, t, cam(1800, 700, .8));
-  // 2) 墙（真实：暖白灰泥 + 阳光）
+  // 2) 墙（真实：暖白灰泥 + 阳光）——全屏
   g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#e9dfcc'; g.fillRect(0, 0, W, H);
-  const cx = 960, cy = lerp(540, 470, u);
+  // 本镜全在设计帧里 ⇒ 一切走等比装入：位置 frX/frY、尺寸 ×FS（下面的 g.scale(FS,FS) 让内部沿用设计坐标）。
+  const cxD = 960, cyD = lerp(540, 470, u), cx = frX(cxD), cy = frY(cyD);
   // 3) 木格窗：窗户纸发光（背光） + 木格
   const winW = 1500 * k * 1.25, winH = 1180 * k * 1.25;
-  g.save(); g.translate(cx, cy);
+  g.save(); g.translate(cx, cy); g.scale(FS, FS);
   const gl = g.createRadialGradient(0, -winH * .2, 0, 0, 0, winW * .8); gl.addColorStop(0, '#fffaf0'); gl.addColorStop(1, '#f6dcaa');
   g.fillStyle = gl; g.fillRect(-winW / 2, -winH / 2, winW, winH);
   // 窗花 = 村子画面裁成圆，背光（提亮、偏暖）
   const rr = 392 * k * 1.25;
   g.save(); g.beginPath(); g.arc(0, 0, rr, 0, 7); g.clip(); g.filter = `brightness(${lerp(1, 1.12, u)}) saturate(${lerp(1, 1.18, u)})`;
-  const sk = k * 1.25 * 392 / 540; g.drawImage(SCc, -960 * sk, -540 * sk, W * sk, H * sk); g.filter = 'none';
+  const sk = k * 1.25 * 392 / 540; g.drawImage(SCc, -W / 2 * sk, -H / 2 * sk, W * sk, H * sk); g.filter = 'none';
   g.globalCompositeOperation = 'soft-light'; g.fillStyle = `rgba(255,190,110,${.35 * u})`; g.fillRect(-rr, -rr, rr * 2, rr * 2);
   g.restore();
-  put(g, REAL.ring, [k * 1.25, 0, 0, k * 1.25, cx, cy], { shadow: 1 }); g.setTransform(1, 0, 0, 1, cx, cy);
+  put(g, REAL.ring, [k * 1.25 * FS, 0, 0, k * 1.25 * FS, cx, cy], { shadow: 1 }); g.setTransform(FS, 0, 0, FS, cx, cy);
   // 木格
   const woodPat = g.createPattern(REAL.wood, 'repeat');
-  g.fillStyle = woodPat; g.shadowColor = 'rgba(40,20,5,.5)'; g.shadowBlur = 16 * k; g.shadowOffsetX = 8 * k; g.shadowOffsetY = 10 * k;
+  g.fillStyle = woodPat; g.shadowColor = 'rgba(40,20,5,.5)'; g.shadowBlur = 16 * k * FS; g.shadowOffsetX = 8 * k * FS; g.shadowOffsetY = 10 * k * FS;
   const bw = 34 * k * 1.25;
   g.beginPath(); g.rect(-winW / 2 - bw, -winH / 2 - bw, winW + 2 * bw, winH + 2 * bw); g.rect(-winW / 2, -winH / 2, winW, winH); g.fill('evenodd');
   for (const fx of [-1, 1]) { g.fillRect(fx * rr * 1.06 - (fx > 0 ? 0 : bw * .6), -winH / 2, bw * .6, winH); }
   for (const fy of [-1, 1]) { g.fillRect(-winW / 2, fy * rr * 1.04 - (fy > 0 ? 0 : bw * .6), winW, bw * .6); }
   g.restore();
-  // 窗台 + 真剪刀 + 红纸屑
-  const sy = cy + winH / 2 + bw;
-  g.fillStyle = g.createPattern(REAL.wood, 'repeat'); g.shadowColor = 'rgba(40,20,5,.4)'; g.shadowBlur = 20; g.shadowOffsetY = 10;
-  g.fillRect(cx - winW / 2 - bw * 3, sy, winW + bw * 6, 60 * k * 1.25 + 30); g.shadowColor = 'transparent';
+  // 窗台 + 真剪刀 + 红纸屑（设计帧坐标 ⇒ 同样等比装入）
+  g.save(); g.setTransform(FS, 0, 0, FS, frX(0), frY(0));
+  const sy = cyD + winH / 2 + bw;
+  g.fillStyle = g.createPattern(REAL.wood, 'repeat'); g.shadowColor = 'rgba(40,20,5,.4)'; g.shadowBlur = 20 * FS; g.shadowOffsetY = 10 * FS;
+  g.fillRect(cxD - winW / 2 - bw * 3, sy, winW + bw * 6, 60 * k * 1.25 + 30); g.shadowColor = 'transparent';
   if (u > .3) {
-    realScissors(g, cx + winW * .18, sy + 14, k * 1.3, -.08);
-    for (let i = 0; i < 14; i++) { const x = cx - winW * .3 + hash(i) * winW * .45, y = sy + 6 + hash(i * 2) * 26 * k; g.save(); g.translate(x, y); g.rotate(hash(i * 3) * 6); g.fillStyle = PAL.red; g.shadowColor = 'rgba(40,10,5,.4)'; g.shadowBlur = 4; g.shadowOffsetY = 3; g.beginPath(); g.moveTo(-12 * k, -3); g.lineTo(12 * k, -6 * k); g.lineTo(3, 9 * k); g.closePath(); g.fill(); g.restore(); }
+    realScissors(g, cxD + winW * .18, sy + 14, k * 1.3, -.08);
+    for (let i = 0; i < 14; i++) { const x = cxD - winW * .3 + hash(i) * winW * .45, y = sy + 6 + hash(i * 2) * 26 * k; g.save(); g.translate(x, y); g.rotate(hash(i * 3) * 6); g.fillStyle = PAL.red; g.shadowColor = 'rgba(40,10,5,.4)'; g.shadowBlur = 4; g.shadowOffsetY = 3; g.beginPath(); g.moveTo(-12 * k, -3); g.lineTo(12 * k, -6 * k); g.lineTo(3, 9 * k); g.closePath(); g.fill(); g.restore(); }
   }
-  // 阳光斜光束 + 暖色
+  g.restore();
+  // 阳光斜光束 + 暖色（全屏叠加）
   g.globalCompositeOperation = 'soft-light'; const sl = g.createLinearGradient(0, 0, W, H); sl.addColorStop(0, 'rgba(255,220,160,.5)'); sl.addColorStop(1, 'rgba(120,80,40,.4)'); g.fillStyle = sl; g.fillRect(0, 0, W, H);
   g.restore();
-  // 4) 片尾：对联 + 横批 + 落款
+  // 4) 片尾：对联 + 横批 + 落款（设计帧家什 ⇒ 等比装入）
   const e = E_(t, T.end - .4, T.end + .1), ban = st(t - T.end);
   if (t > T.end - .4) {
-    const cy2 = cy;
-    put(g, REAL.couplet, [1, 0, 0, 1, cx - winW / 2 - bw - 150 - (1 - e) * 400, cy2 - 350], { shadow: 1.2 });
-    put(g, REAL.couplet, [1, 0, 0, 1, cx + winW / 2 + bw + 60 + (1 - e) * 400, cy2 - 350], { shadow: 1.2 });
+    put(g, REAL.couplet, fitM([1, 0, 0, 1, cxD - winW / 2 - bw - 150 - (1 - e) * 400, cyD - 350]), { shadow: 1.2 });
+    put(g, REAL.couplet, fitM([1, 0, 0, 1, cxD + winW / 2 + bw + 60 + (1 - e) * 400, cyD - 350]), { shadow: 1.2 });
   }
   if (t > T.end) {
     const drop = ban < .09 ? -40 : ban < .17 ? 8 : 0;
-    const bwid = 900; const [bc, bg2] = [null, null];
-    g.save(); g.shadowColor = 'rgba(40,10,5,.45)'; g.shadowBlur = 12; g.shadowOffsetX = 5; g.shadowOffsetY = 8;
+    const bwid = 900;
+    g.save(); g.setTransform(FS, 0, 0, FS, frX(0), frY(0)); g.shadowColor = 'rgba(40,10,5,.45)'; g.shadowBlur = 12 * FS; g.shadowOffsetX = 5 * FS; g.shadowOffsetY = 8 * FS;
     g.fillStyle = PAL.sub; const y0 = 26 + drop; g.beginPath(); trace(g, Pl([[960 - bwid / 2, y0], [960 + bwid / 2, y0], [960 + bwid / 2 - 30, y0 + 64], [960 + bwid / 2, y0 + 128], [960 - bwid / 2, y0 + 128], [960 - bwid / 2 + 30, y0 + 64]], true, .8, 3)); g.fill(); g.restore();
-    put(g, REAL.title, [1, 0, 0, 1, 960 - REAL.title.w / 2, 26 + drop + 10], { shadow: .6 });
-    g.save(); g.globalAlpha = E_(t, T.end + .4, T.end + .9); g.font = '600 38px "Fraunces"'; g.fillStyle = '#4a1a10'; g.textAlign = 'center'; g.fillText('LemoLab × Claude Opus 5.5', 960, 1050); g.restore();
+    put(g, REAL.title, fitM([1, 0, 0, 1, 960 - REAL.title.w / 2, 26 + drop + 10]), { shadow: .6 });
+    g.save(); g.setTransform(FS, 0, 0, FS, frX(0), frY(0)); g.globalAlpha = E_(t, T.end + .4, T.end + .9); g.font = `600 ${38 * FS}px "Fraunces"`; g.fillStyle = '#4a1a10'; g.textAlign = 'center'; g.fillText('LemoLab × Claude Opus 5.5', 960, 1050); g.restore();
   }
 }
 
@@ -512,12 +523,12 @@ function render(t) {
   (SHOT[name])(g, t);
   g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; g.filter = 'none'; noShadow(g);
   if (qs.get('nosub') !== '1') drawSubs(g, t, SUBS);
-  if (qs.get('poster') === '1') {   // 海报：顶部红纸横批片名
+  if (qs.get('poster') === '1') {   // 海报：顶部红纸横批片名（设计帧家什 ⇒ 等比装入）
     const tp = textPiece('NIAN COMES TO TOWN', 92, 800, '#fff1d6', 'Fraunces', 7, 4), w = tp.w + 140, x0 = 960 - w / 2;
-    g.save(); g.shadowColor = 'rgba(20,4,8,.5)'; g.shadowBlur = 14; g.shadowOffsetX = 5; g.shadowOffsetY = 8; g.fillStyle = PAL.sub;
+    g.save(); g.setTransform(FS, 0, 0, FS, frX(0), frY(0)); g.shadowColor = 'rgba(20,4,8,.5)'; g.shadowBlur = 14 * FS; g.shadowOffsetX = 5 * FS; g.shadowOffsetY = 8 * FS; g.fillStyle = PAL.sub;
     g.beginPath(); trace(g, Pl([[x0, 40], [x0 + w, 40], [x0 + w - 36, 110], [x0 + w, 180], [x0, 180], [x0 + 36, 110]], true, .8, 3)); g.fill(); g.restore();
-    put(g, tp, [1, 0, 0, 1, 960 - tp.w / 2, 52], { shadow: .5 });
-    g.save(); g.font = 'italic 500 30px "Fraunces"'; g.fillStyle = '#fff1d6'; g.textAlign = 'center'; g.shadowColor = 'rgba(0,0,0,.6)'; g.shadowBlur = 8; g.fillText('Red Paper-cut  ·  LemoLab × Claude Opus 5.5', 960, 222); g.restore();
+    put(g, tp, fitM([1, 0, 0, 1, 960 - tp.w / 2, 52]), { shadow: .5 });
+    g.save(); g.setTransform(FS, 0, 0, FS, frX(0), frY(0)); g.font = `italic 500 ${30 * FS}px "Fraunces"`; g.fillStyle = '#fff1d6'; g.textAlign = 'center'; g.shadowColor = 'rgba(0,0,0,.6)'; g.shadowBlur = 8 * FS; g.fillText('Red Paper-cut  ·  LemoLab × Claude Opus 5.5', 960, 222); g.restore();
   }
 }
 // 事件（拟音 / 旁白）

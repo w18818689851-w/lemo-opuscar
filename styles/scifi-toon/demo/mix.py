@@ -10,7 +10,14 @@ LINES = {l['id']: l for l in json.load(open(os.path.join(HERE, 'lines.json')))}
 rng = np.random.default_rng(5)
 def brown_(d):
     w = np.cumsum(nz(d)); w -= np.linspace(w[0], w[-1], len(w)); return norm(hp(w, 20))
-def nz(d): return rng.standard_normal(int(d * SR))   # 与 t_() 同长度
+# ★ 2026-10-03 修：这里原来写 `int(d * SR)`（**截断**），而 core/audio/sfx.py 的 `t_(d)` 用的是
+#   `int(round(d * SR))`（**四舍五入**）—— 当 d*SR 的小数部分 ≥ .5 时两者差 1 个样本，
+#   于是 `np.sin(... t_(d) ...) + bp(nz(d), ...)` 直接抛
+#   `ValueError: operands could not be broadcast together with shapes (158400,) (158399,)`，
+#   整条音频链挂掉、本风格一直出不了片（编排器注释里登记为「demo 自身 bug」）。
+#   下面这行注释本来写的就是「与 t_() 同长度」，但实现没做到。改成**按 t_ 的实际长度取**，
+#   长度从此按构造保证一致，不会再随 d 的小数部分漂移。
+def nz(d): return rng.standard_normal(len(t_(d)))   # 与 t_() 同长度（按构造保证）
 sfxb, vob, amb = np.zeros((N, 2)), np.zeros((N, 2)), np.zeros((N, 2))
 
 def sweep(f0, f1, d, curve=1.0):

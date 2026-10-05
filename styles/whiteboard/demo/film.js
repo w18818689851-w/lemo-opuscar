@@ -4,6 +4,13 @@ import * as W from './engine/wb.js';
 import { clamp, lerp, TAU, mulberry } from '/core/lib.js';
 
 const { INK } = W;
+// 帧尺寸由调用方（main.js 读视口后调 setFrame）定；render 的首行会再钉一次，版面随实际帧重排。
+export { NATIVE, setFrame } from './engine/wb.js';
+// FILM_META.aspects —— 这部影片**真的能正确构图**的输出比例清单（**字面量**：控制台按源码文本探测，不是求值，
+// 见 D:\lemo-tools\lib\aspects.mjs）。不写 = 只支持 16:9（= 没改造过，按 1920×1080 绝对像素构图、给别的尺寸会被裁）。
+// 已适配多比例：板面世界内容由 2D 相机取景，相机经 applyCam 把设计帧等比装入当前帧（中心对齐、×S），
+// 屏幕空间家什（墙/墨层/反光/字幕/笔/磁贴/板擦）按 FX/FY 拉伸、按 S 缩放；1920×1080 时 FX=FY=S=1 逐字节退化。
+export const FILM_META = { id: 'einstein-pocket', title: 'Einstein in Your Pocket', style: 'Whiteboard Explainer', aspects: ['16:9', '9:16'] };
 export const BPM = 120, BEAT = 60 / BPM, T0 = 10.0;           // music grid: downbeat of bar 1 = title
 export const VO = {
   v01: 0.9, v02a: 5.7, v02b: 8.0, v03: 14.2, v04: 19.1, v05: 24.6, v06: 30.3, v07: 34.9, v08: 38.1,
@@ -360,25 +367,25 @@ export async function build() {
     draw: (ctx, t) => {
       const s = subs.find(s => t >= s.t0 && t < s.t1); if (!s) return;
       const a = Math.min(1, (t - s.t0) / .12, (s.t1 - t) / .12);
-      ctx.font = '44px AD';
+      ctx.font = `${44 * W.S}px AD`;
       let rows = [s.text];
-      if (ctx.measureText(s.text).width > 1250) {     // two balanced lines
+      if (ctx.measureText(s.text).width > 1250 * W.S) {     // two balanced lines
         const ws = s.text.split(' '); let best = 1, bd = 1e9;
         for (let i = 1; i < ws.length; i++) { const d = Math.abs(ctx.measureText(ws.slice(0, i).join(' ')).width - ctx.measureText(ws.slice(i).join(' ')).width); if (d < bd) { bd = d; best = i; } }
         rows = [ws.slice(0, best).join(' '), ws.slice(best).join(' ')];
       }
-      const w = Math.max(...rows.map(r => ctx.measureText(r).width)) + 64, h = 70 + (rows.length - 1) * 52, y0 = 1038 - h;
-      ctx.globalAlpha = a * .9; ctx.fillStyle = '#fdfcf8'; ctx.shadowColor = 'rgba(30,30,40,.18)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 4;
-      ctx.beginPath(); ctx.roundRect(960 - w / 2, y0, w, h, 14); ctx.fill();
+      const w = Math.max(...rows.map(r => ctx.measureText(r).width)) + 64 * W.S, h = (70 + (rows.length - 1) * 52) * W.S, y0 = 1038 * W.FY - h;
+      ctx.globalAlpha = a * .9; ctx.fillStyle = '#fdfcf8'; ctx.shadowColor = 'rgba(30,30,40,.18)'; ctx.shadowBlur = 18 * W.S; ctx.shadowOffsetY = 4 * W.S;
+      ctx.beginPath(); ctx.roundRect(W.W / 2 - w / 2, y0, w, h, 14 * W.S); ctx.fill();
       ctx.shadowColor = 'transparent'; ctx.globalAlpha = a;
-      ctx.fillStyle = INK.orange; ctx.fillRect(960 - w / 2 + 22, y0 + h - 12, 36, 4);
+      ctx.fillStyle = INK.orange; ctx.fillRect(W.W / 2 - w / 2 + 22 * W.S, y0 + h - 12 * W.S, 36 * W.S, 4 * W.S);
       ctx.fillStyle = '#23262c'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      rows.forEach((r, i) => ctx.fillText(r, 960, y0 + 37 + i * 52));
+      rows.forEach((r, i) => ctx.fillText(r, W.W / 2, y0 + (37 + i * 52) * W.S));
     }
   });
 
   // ───────── frame render with camera motion blur on whips
-  const off = new OffscreenCanvas(1920, 1080), oc = off.getContext('2d');
+  const off = new OffscreenCanvas(W.W, W.H), oc = off.getContext('2d');
   const noSubs = new URLSearchParams(location.search).has('nosubs');
   if (noSubs) board.overlays.length = 0;
   const posterCam = new W.Camera([[0, 1120, 790, 1.0]]);
@@ -398,6 +405,6 @@ export async function build() {
   }
 
   const ev = [...tl.ev, ...Object.entries(VO).map(([id, t]) => ({ t, type: 'vo', id }))].sort((a, b) => a.t - b.t);
-  for (const e of ev) if (e.x != null) { const c = cam.at(e.t), [px, py] = W.toScreen(c, e.x, e.y); e.pan = +clamp((px - 960) / 1400, -.7, .7).toFixed(2); e.z = +c.z.toFixed(2); e.on = px > -100 && px < 2020 && py > -100 && py < 1180 ? 1 : 0; }
+  for (const e of ev) if (e.x != null) { const c = cam.at(e.t), [px, py] = W.toScreen(c, e.x, e.y); e.pan = +clamp((px - W.W / 2) / (1400 * W.S), -.7, .7).toFixed(2); e.z = +c.z.toFixed(2); e.on = px > -100 * W.S && px < W.W + 100 * W.S && py > -100 * W.S && py < W.H + 100 * W.S ? 1 : 0; }
   return { dur: END, render, ev, subs, cam, tl, VO, cues: { T0, BEAT, drift0, driftEnd, dayT, duet0, duetEnd, fix0, fixEnd, pinOnAt, pinOffAt, rw0, rwDur, trayAt, eraserTray, crT0 } };
 }

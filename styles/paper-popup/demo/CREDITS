@@ -7,9 +7,13 @@ All characters, pop-up sets, page art, the book cover and the story are original
 MUSIC — Kevin MacLeod (incompetech.com), Creative Commons Attribution 4.0 (CC BY 4.0)
   https://creativecommons.org/licenses/by/4.0/
   Used in the film (edited in music/edit.py; credited on the end card):
-  - "Dreamy Flashback"   — opening on the desk (0–16 s)            https://incompetech.com/music/royalty-free/
+  - "Dreamy Flashback"   — opening on the desk (0–16 s)
+      https://incompetech.com/music/royalty-free/mp3-royaltyfree/Dreamy%20Flashback.mp3
   - "Jaunty Gumption"    — the paper world, bar-aligned jump cut (15.4–104.2 s)
+      https://incompetech.com/music/royalty-free/mp3-royaltyfree/Jaunty%20Gumption.mp3
   - "Heartwarming"       — the real world / ending (104.8–133 s)
+      https://incompetech.com/music/royalty-free/mp3-royaltyfree/Heartwarming.mp3
+  (mp3s are .gitignore'd, so a fresh clone must re-fetch them; 2026-10-03 实测三条直链均返回 HTTP 200)
   Attribution text: "<title>" Kevin MacLeod (incompetech.com) · Licensed under Creative Commons: By Attribution 4.0
   Candidates auditioned but NOT used (music/survey.py): Carefree, Easy Lemon, Fluffing a Duck, Life of Riley,
   Merry Go, Monkeys Spinning Monkeys, Pippin the Hunchback, Sneaky Adventure, Wallpaper, Wholesome

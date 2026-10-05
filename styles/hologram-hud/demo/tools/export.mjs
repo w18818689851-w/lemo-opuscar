@@ -1,10 +1,10 @@
 // 导出 events.json（音效事件）、timeline.json（配乐网格）、out/srt.json（字幕）
 // 用法（仓库根）：node styles/hologram-hud/demo/tools/export.mjs [content.json] [工作目录，默认 demo/]
-import fs from 'fs'; import path from 'path'; import { fileURLToPath } from 'url';
+import fs from 'fs'; import path from 'path'; import { fileURLToPath, pathToFileURL } from 'url';
 const D = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ROOT = path.resolve(D, '../../..');
 process.chdir(ROOT);
-const { openDemo, closeServer } = await import(path.join(ROOT, 'core/render/page.mjs'));
+const { openDemo, closeServer } = await import(pathToFileURL(path.join(ROOT, 'core/render/page.mjs')).href);
 const rel = path.relative(ROOT, D);
 const content = process.argv[2] || 'content.json', W = path.resolve(process.argv[3] || D);
 const q = `content=${content}&voices=${path.relative(D, path.join(W, 'voices')) || 'voices'}`;

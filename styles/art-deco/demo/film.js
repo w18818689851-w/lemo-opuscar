@@ -10,9 +10,20 @@ import { stairShot } from './shots_stairs.js';
 import { kitchenShot } from './shots_kitchen.js';
 import { roofRun, towerClock, roofThrow, letterFall, theCatch, bandleader, signLights, lastLetter } from './shots_roof.js';
 import { doors } from './scenes/lobby.js';
+import { W, H, S, dY } from './frame.js';   // 当前帧（frame.setFrame() 定的活绑定）
 
 export const DUR = TL.DUR;
 const Tm = TL.T;
+
+// 影片元数据：aspects 是**字面量**（lib/aspects.mjs 按文本正则探测，不写 = 只支持 16:9）。
+// 已适配多比例：整幅设计画面按紧轴等比装入、居中；留白与字幕是当前帧的家什 —— 见 frame.js 与下面的 renderFilm。
+export const FILM_META = {
+  id: 'midnight',
+  title: 'Midnight',
+  style: 'Art Deco',
+  aspects: ['16:9', '9:16'],
+};
+
 const SHOTS = [
   [0, Tm.street, titleShot, 'title'],
   [Tm.street, Tm.envelope, streetShot, 'street'],
@@ -91,6 +102,15 @@ function revolve(g, img, t) {
 export function renderFilm(g, t, Q) {
   const shot = shotAt(t);
   const tr = TR.find(r => t >= r[0] && t < r[1]);
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  // 同色留白：9:16 下画面之外的影院黑（16:9 时整幅画面会把它完全盖住，不可见 ⇒ 逐字节不变）
+  g.fillStyle = '#050403'; g.fillRect(0, 0, W, H);
+  g.save();
+  // 整幅设计画面按紧轴等比装入、居中：所有绘制代码仍在 1920×1080 坐标系里写（S=1 时此变换是恒等）。
+  // ★ 必须裁到设计帧：镜头会故意画到 1920×1080 之外（高塔、溢出边），不裁的话它们会溢出到留白区。
+  const bx = W / 2 - 960 * S, by = H / 2 - 540 * S;
+  g.beginPath(); g.rect(bx, by, 1920 * S, 1080 * S); g.clip();
+  g.transform(S, 0, 0, S, bx, by);
   if (tr && tr[4]) tr[4](g, t); else shot[2](g, t);
   if (tr) {
     const p = (t - tr[0]) / (tr[1] - tr[0]);
@@ -106,6 +126,7 @@ export function renderFilm(g, t, Q) {
       else revolve(g, off(), t);
     }
   }
+  g.restore();
   if (!(Q && Q.has && Q.has('nosub'))) drawSubs(g, t);
 }
 
@@ -122,10 +143,11 @@ export function subs() {
   });
 }
 function drawSubs(g, t) {
+  // 字幕是**当前帧**的家什（画在整幅画面的变换之外）：中心 x 随帧宽、基线随帧高、字号与卡宽 ×S。
   for (const s of subs()) {
     if (t < s.t0 - .05 || t > s.t1 + .3) continue;
     const p = D.seg(t, s.t0 - .05, s.t0 + .3), out = D.seg(t, s.t1 - .05, s.t1 + .25);
-    T.subtitleCard(g, s.text, { p, out, speaker: s.who === 'boy' ? 'boy' : 'radio', cy: 990, size: 40 });
+    T.subtitleCard(g, s.text, { p, out, speaker: s.who === 'boy' ? 'boy' : 'radio', cx: W / 2, cy: dY(990), size: 40 * S, maxW: 1500 * S });
   }
 }
 export function events() { return SHOTS.map(s => ({ t: s[0], type: 'shot', name: s[3] })); }

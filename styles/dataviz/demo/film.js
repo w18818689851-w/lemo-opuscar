@@ -1,9 +1,17 @@
 // A Hundred Summers — the film. Story, camera and timing only; all drawing goes through engine.js.
 import * as E from './engine.js';
-import { P, W, H } from './engine.js';
+import { P, W, H, NATIVE, setFrame, FX, FY, S } from './engine.js';
+export { NATIVE };
 import { B, T, K, yearK, X, U, BOX, BAND, LIFE0, LIFE1, DUR, lifeYears } from './timeline.js';
 import { clamp, lerp, seg, ss, eio, eo, hash, vnoise } from '/core/lib.js';
 export { DUR };
+
+// FILM_META.aspects —— 这部影片**真的能正确构图**的输出比例清单（**字面量**：控制台按源码文本探测，不是求值，
+// 见 D:\lemo-tools\lib\aspects.mjs）。不写 = 只支持 16:9（= 没改造过，按 1920×1080 绝对像素构图、给别的尺寸会被裁）。
+// renderFilm 从 opts.W/opts.H 经 engine.setFrame() 重排：屏幕空间的家什（粘性轴标、字幕条、铅笔）随 fx/fy 拉伸、
+// 尺寸随 S=min(fx,fy) 缩放；相机 zoom 乘 S，使 1926–2026 全图在任何比例下都完整可见（不被裁）。1920×1080 时
+// fx = fy = S = 1，逐字节退化成设计帧，所以 16:9 与改造前完全一致。
+export const FILM_META = { id: 'hundred-summers', title: 'A Hundred Summers', style: 'Data Storytelling', aspects: ['16:9', '9:16'] };
 
 const LIFE = lifeYears();
 const V = {};                       // year → JJA anomaly (°C)
@@ -100,6 +108,9 @@ function camAt(t) {
   else if (k < 68) c = mix({ x: 420, y: 0, zoom: .72 }, { x: 1290, y: 0, zoom: 1.3 }, eio(seg(k, 64.3, 67.8)));
   else c = mix({ x: 1290, y: 0, zoom: 1.3 }, END_CAM, eio(seg(k, 68, 70)));
   c.roll = c.roll || 0; c.sx = 0; c.sy = 0;
+  // Sizes scale by the tighter axis: the camera's zoom is the film's one "size". Scaling it by S keeps the whole
+  // 1926–2026 chart inside the frame at every ratio (the same world width stays visible) instead of cropping it.
+  c.zoom *= S;
   // shake: the break (k40), the second break, the rush
   const sh = (amp, f, s) => [(vnoise(t * f + s) - .5) * 2 * amp, (vnoise(t * f + s + 40) - .5) * 2 * amp];
   let amp = 0;
@@ -168,7 +179,7 @@ function penAt(t, cam) {
   const k = t / B;
   if (k >= 55.5 && k < 64.2) return null;                           // off stage during the pull-back, morph and scale
   if (k >= 68.3) return null;
-  const off = tt => { const c = camAt(tt); return E.s2w(c, 2150, 1320); };
+  const off = tt => { const c = camAt(tt); return E.s2w(c, W + 230 * S, H + 240 * S); };
   let cur = null, prev = null, next = null;
   for (let i = 0; i < ACTS.length; i++) {
     const a = ACTS[i];
@@ -274,22 +285,22 @@ function stickyLabels(g, t, cam, fade) {
   if (gridIn <= 0 || fade <= 0) return;
   g.save(); g.setTransform(1, 0, 0, 1, 0, 0);
   { // frozen column: once the real axis scrolls off-screen the labels pin to the left edge over a paper strip
-    const ax = E.w2s(cam, -40, 0)[0], fz = clamp((150 - ax) / 60) * gridIn * fade;
-    if (fz > 0) { const gr = g.createLinearGradient(118, 0, 175, 0); gr.addColorStop(0, `rgba(246,243,236,${.96 * fz})`); gr.addColorStop(1, 'rgba(246,243,236,0)'); g.fillStyle = `rgba(246,243,236,${.96 * fz})`; g.fillRect(0, 0, 118, H); g.fillStyle = gr; g.fillRect(118, 0, 57, H);
-      g.strokeStyle = P.rule; g.globalAlpha = fz; g.lineWidth = 1; g.beginPath(); g.moveTo(124.5, 0); g.lineTo(124.5, H); g.stroke(); g.globalAlpha = 1; }
+    const ax = E.w2s(cam, -40, 0)[0], fz = clamp((150 * FX - ax) / (60 * FX)) * gridIn * fade;
+    if (fz > 0) { const gr = g.createLinearGradient(118 * FX, 0, 175 * FX, 0); gr.addColorStop(0, `rgba(246,243,236,${.96 * fz})`); gr.addColorStop(1, 'rgba(246,243,236,0)'); g.fillStyle = `rgba(246,243,236,${.96 * fz})`; g.fillRect(0, 0, 118 * FX, H); g.fillStyle = gr; g.fillRect(118 * FX, 0, 57 * FX, H);
+      g.strokeStyle = P.rule; g.globalAlpha = fz; g.lineWidth = 1 * S; g.beginPath(); g.moveTo(124.5 * FX, 0); g.lineTo(124.5 * FX, H); g.stroke(); g.globalAlpha = 1; }
   }
   for (let v = -.8; v <= 1.61; v += .4) {
     const y = Yv(v, vm); if (y < BOX.top - .5 || y > BOX.bot) continue;
     const A = E.w2s(cam, cam.x - 3000, y), Bp = E.w2s(cam, cam.x + 3000, y);
     const axS = E.w2s(cam, -40, y);
-    const sxRight = Math.max(112, axS[0] - 10);
+    const sxRight = Math.max(112 * FX, axS[0] - 10 * S);
     const f = (sxRight - A[0]) / (Bp[0] - A[0]), sy = lerp(A[1], Bp[1], f);
-    if (sy < 20 || sy > 880) continue;
+    if (sy < 20 * FY || sy > 880 * FY) continue;
     const lab = Math.abs(v) < .01 ? '0.0' : (v > 0 ? '+' : '−') + Math.abs(v).toFixed(1);
     g.globalAlpha = fade * gridIn * clamp((y - BOX.top + 40) / 40);
-    g.fillStyle = P.paper; g.fillRect(sxRight - 62, sy - 13, 66, 22);
-    E.setType(g, lab + '°', sxRight, sy + 6, { size: 18, align: 'right', color: Math.abs(v) < .01 ? P.ink : P.inkSoft });
-    if (Math.abs(v) < .01) { g.fillRect(sxRight + 10, sy - 26, 170, 20); E.setType(g, '0 = 1951–80 average', sxRight + 14, sy - 10, { size: 15, align: 'left', color: P.inkSoft }); }
+    g.fillStyle = P.paper; g.fillRect(sxRight - 62 * S, sy - 13 * S, 66 * S, 22 * S);
+    E.setType(g, lab + '°', sxRight, sy + 6 * S, { size: 18 * S, align: 'right', color: Math.abs(v) < .01 ? P.ink : P.inkSoft });
+    if (Math.abs(v) < .01) { g.fillRect(sxRight + 10 * S, sy - 26 * S, 170 * S, 20 * S); E.setType(g, '0 = 1951–80 average', sxRight + 14 * S, sy - 10 * S, { size: 15 * S, align: 'left', color: P.inkSoft }); }
   }
   g.restore();
 }
@@ -297,6 +308,7 @@ function stickyLabels(g, t, cam, fade) {
 // ---------- main render ----------
 export function renderFilm(g, t, opt = {}) {
   _g = g;
+  setFrame(opt.W ?? NATIVE.W, opt.H ?? NATIVE.H);
   const k = t / B, cam = camAt(t);
   E.drawPaper(g, cam, { dots: .9 });
   E.applyCam(g, cam);
@@ -420,7 +432,7 @@ export function renderFilm(g, t, opt = {}) {
   const pen = penAt(t, cam);
   if (!opt.nosub) {
     let vis = 0; for (const c of CAPS) vis = Math.max(vis, clamp((t - c.t0) / .25) * (1 - clamp((t - c.t1) / .3)));
-    if (vis > 0) { g.save(); g.setTransform(1, 0, 0, 1, 0, 0); const gr = g.createLinearGradient(0, 850, 0, 925); gr.addColorStop(0, 'rgba(246,243,236,0)'); gr.addColorStop(1, `rgba(246,243,236,${.94 * vis})`); g.fillStyle = gr; g.fillRect(0, 850, W, 230); g.restore(); }
+    if (vis > 0) { g.save(); g.setTransform(1, 0, 0, 1, 0, 0); const gr = g.createLinearGradient(0, 850 * FY, 0, 925 * FY); gr.addColorStop(0, 'rgba(246,243,236,0)'); gr.addColorStop(1, `rgba(246,243,236,${.94 * vis})`); g.fillStyle = gr; g.fillRect(0, 850 * FY, W, 230 * FY); g.restore(); }
   }
   if (pen) { const s = E.w2s(cam, pen.p[0], pen.p[1]); E.drawPencil(g, { tip: s, s: .72 * Math.pow(cam.zoom, .6), lift: pen.lift, flip: pen.flip, blur: pen.blur, focus: pen.focus, ang: pen.ang }); }
   if (!opt.nosub) {

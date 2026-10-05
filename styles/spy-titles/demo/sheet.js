@@ -1,5 +1,5 @@
 // 角色设定表：index.html?sheet=1&v=1（整张也是剪纸 + 四色纸做的）
-import { g, C, S, clear, piece, rough, roughC, rectP, circP, label, smooth } from './paper.js';
+import { g, C, ST, clear, piece, rough, roughC, rectP, circP, label, smooth } from './paper.js';
 import { layout, drawLine } from './glyph.js';
 import { agentSide, agentFront, courierSide, courierFront, key, keyholeP, runPose, walkPose, coRunPose, AGENT_POSE, COURIER_POSE } from './chars.js';
 
@@ -48,14 +48,14 @@ export function modelSheet(t, Q) {
   // 卡片：芥末黄底，I 字柱在他前面，只露帽檐、鼻尖、鞋尖
   const cx = 240, cw = 300;
   card(cx, 728, cw, 290, C.mus, 77);
-  S.bg = C.mus;
+  ST.bg = C.mus;
   g.save(); g.beginPath(); g.rect(cx + 6, 732, cw - 12, 282); g.clip();
   piece(rough([[cx, 980], [cx + cw, 980], [cx + cw, 1030], [cx, 1030]], 78, 1, 12), C.ink, { gap: 0, shadow: false });
   agentSide(cx + 150 + 14, 980, .48, AGENT_POSE.flatten);
   const il = layout('I', 440, {});
   drawLine(il, cx + 150 - (il.letters[0].x0 + il.letters[0].x1) / 2 - 2, 986, { col: C.ink, seed: 12, jit: 0, amp: 1.4, shA: .45 });
   g.restore();
-  S.bg = C.paper;
+  ST.bg = C.paper;
   LBL('BEHIND THE “I”', cx + cw / 2, gy2 + 40, 15);
 
   // ── D. 转身 ──
@@ -93,7 +93,7 @@ export function modelSheet(t, Q) {
   g.save(); g.translate(1620, 790); g.scale(1.3, 1.3);
   piece(roughC('kh1', () => keyholeP(1), 301, .7, 6), C.red, { gap: 0, shadow: false });
   g.restore();
-  S.bg = C.red; key(1620, 790, 1.3 * .93, 0, { line: 0 }); S.bg = C.paper;
+  ST.bg = C.red; key(1620, 790, 1.3 * .93, 0, { line: 0 }); ST.bg = C.paper;
   ['KEY', 'KEYHOLE', 'FITTED'].forEach((s, i) => LBL(s, [1310, 1470, 1620][i], gy2 + 40, 15));
   piece([[1375, 870], [1405, 870], [1405, 862], [1420, 874], [1405, 886], [1405, 878], [1375, 878]], C.ink, { gap: 0, shadow: false });
   label('+', 1527, 885, '700 34px LSpartan', C.ink, 'center');

@@ -3,7 +3,15 @@
 import { clamp, lerp, seg, ss, eo, ei, eio, back, spring, mulberry, hash, TAU } from '../../../core/lib.js';
 export { clamp, lerp, seg, ss, eo, ei, eio, back, spring, mulberry, hash, TAU };
 
-export const W = 1920, H = 1080;
+// 帧尺寸不是常量：渲染器截的是浏览器**视口**，`--size/--ratio` 会改它。NATIVE 是设计帧（1920×1080）。
+// renderFilm 首行按实际帧调 setFrame()。两套坐标各归各的：
+//   · 世界层（相机里的桌面/窗口/元素）：相机 zoom 折入紧轴缩放 S，世界按 S 等比装入当前帧并居中；
+//   · 全屏层（底/网格/暗角/字幕吐司/插入镜/数字镜/片尾卡）：贴**当前帧**，位置按 FX/FY、尺寸按 S。
+// 1920×1080 时 FX = FY = S = 1，每个表达式退化成它替换掉的那个数字 ⇒ 16:9 逐字节不变。
+// 顶层不许算几何：W/H 只在 setFrame() 里被赋值。
+export const NATIVE = { W: 1920, H: 1080 };
+export let W = NATIVE.W, H = NATIVE.H, FX = 1, FY = 1, S = 1;
+export function setFrame(w, h) { W = w; H = h; FX = w / NATIVE.W; FY = h / NATIVE.H; S = Math.min(FX, FY); }
 export const PAL = {
   bg0: '#0A0B0F', bg1: '#151822', surf: '#12151C', surf2: '#1A1E28', surf3: '#222734',
   line: 'rgba(255,255,255,.08)', hi: 'rgba(255,255,255,.10)',
@@ -41,10 +49,10 @@ export function bg(g, o = {}) {
   const { lift = 1, cool = 1, dark = 0, cx = W * 0.5, cy = H * 0.34 } = o;
   g.save(); g.setTransform(1, 0, 0, 1, 0, 0);
   g.fillStyle = PAL.bg0; g.fillRect(0, 0, W, H);
-  let gr = g.createRadialGradient(cx, cy, 0, cx, cy, W * 0.75);
+  let gr = g.createRadialGradient(cx, cy, 0, cx, cy, Math.max(W, H) * 0.75);
   gr.addColorStop(0, rgba(PAL.bg1, 0.95 * lift)); gr.addColorStop(1, rgba(PAL.bg0, 0));
   g.fillStyle = gr; g.fillRect(0, 0, W, H);
-  if (cool > 0) glow(g, W * 0.78, H * 0.12, 900, PAL.cool, 0.08 * cool);
+  if (cool > 0) glow(g, W * 0.78, H * 0.12, 900 * S, PAL.cool, 0.08 * cool);
   if (dark > 0) { g.fillStyle = `rgba(4,5,7,${dark})`; g.fillRect(0, 0, W, H); }
   g.restore();
 }
@@ -57,7 +65,7 @@ export function glow(g, x, y, r, color, a) {
 }
 /** 细线网格：屏幕空间，ox/oy/scale 让它跟着摄影机走。module 世界单位 */
 export function grid(g, o = {}) {
-  const { ox = 0, oy = 0, scale = 1, module = 48, alpha = 1, major = 4, rect = [0, 0, W, H], color = '255,255,255' } = o;
+  const { ox = 0, oy = 0, scale = 1, module = 48 * S, alpha = 1, major = 4, rect = [0, 0, W, H], color = '255,255,255' } = o;
   const step = module * scale; if (step < 4 || alpha <= 0) return;
   const [rx, ry, rw, rh] = rect;
   g.save(); g.beginPath(); g.rect(rx, ry, rw, rh); g.clip(); g.lineWidth = 1;
@@ -439,13 +447,13 @@ export function scramble(g, text, x, y, t, locks, o = {}) {
 /** UI 说明气泡：底部居中胶囊 + 青柠说话点。a 0..1 进出场，o.dense 混乱段加深 */
 export function toast(g, text, a, o = {}) {
   if (a <= 0) return;
-  const { y = H - 72, px = 40, dense = 0 } = o;
+  const { y = H - 72 * FY, px = 40 * S, dense = 0 } = o;
   g.save(); g.font = font(px, 500);
-  const tw = g.measureText(text).width, h = px * 1.9, w = tw + px * 2.4, x = W / 2 - w / 2, yy = y - h + (1 - eo(a)) * 12;
+  const tw = g.measureText(text).width, h = px * 1.9, w = tw + px * 2.4, x = W / 2 - w / 2, yy = y - h + (1 - eo(a)) * 12 * S;
   g.globalAlpha = eo(a);
-  g.shadowColor = 'rgba(0,0,0,.5)'; g.shadowBlur = 40; g.shadowOffsetY = 10;
+  g.shadowColor = 'rgba(0,0,0,.5)'; g.shadowBlur = 40 * S; g.shadowOffsetY = 10 * S;
   g.fillStyle = `rgba(12,14,19,${0.72 + 0.16 * dense})`; rr(g, x, yy, w, h, h / 2); g.fill(); g.shadowColor = 'transparent';
-  g.strokeStyle = 'rgba(255,255,255,.09)'; g.lineWidth = 1; rr(g, x + 0.5, yy + 0.5, w - 1, h - 1, h / 2); g.stroke();
+  g.strokeStyle = 'rgba(255,255,255,.09)'; g.lineWidth = 1 * S; rr(g, x + 0.5, yy + 0.5, w - 1, h - 1, h / 2); g.stroke();
   g.fillStyle = PAL.accent; g.shadowColor = rgba(PAL.accent, 0.8); g.shadowBlur = 10; g.beginPath(); g.arc(x + px * 0.95, yy + h / 2, px * 0.14, 0, TAU); g.fill(); g.shadowColor = 'transparent';
   g.fillStyle = PAL.text; g.textBaseline = 'middle'; g.fillText(text, x + px * 1.5, yy + h / 2 + 1);
   g.restore();
@@ -459,16 +467,17 @@ export function toast(g, text, a, o = {}) {
 export function camera(c) {
   const { x = W / 2, y = H / 2, zoom = 1, rot = 0, sx = 0, sy = 0 } = c;
   const inv = 1 / zoom;
+  // 世界 → 当前帧：把紧轴缩放 S 折进来（S = 1 时与原式逐位相同），世界因此等比装入视口并居中。
   const proj = (px, py, z = 0) => {
     const d = inv - z; if (d <= 0.02) return null;
-    const s = 1 / d; let X = (px - x) * s, Y = (py - y) * s;
+    const s = S / d; let X = (px - x) * s, Y = (py - y) * s;
     const cr = Math.cos(rot), sr = Math.sin(rot);
-    return { x: W / 2 + X * cr - Y * sr + sx, y: H / 2 + X * sr + Y * cr + sy, s };
+    return { x: W / 2 + X * cr - Y * sr + sx * S, y: H / 2 + X * sr + Y * cr + sy * S, s };
   };
   /** 把 ctx 变换到深度 z 的平面（之后按世界坐标画） */
   const apply = (g, z = 0) => {
-    const d = inv - z, s = 1 / Math.max(d, 0.02);
-    g.setTransform(1, 0, 0, 1, 0, 0); g.translate(W / 2 + sx, H / 2 + sy); g.rotate(rot); g.scale(s, s); g.translate(-x, -y);
+    const d = inv - z, s = S / Math.max(d, 0.02);
+    g.setTransform(1, 0, 0, 1, 0, 0); g.translate(W / 2 + sx * S, H / 2 + sy * S); g.rotate(rot); g.scale(s, s); g.translate(-x, -y);
     return s;
   };
   return { x, y, zoom, rot, sx, sy, proj, apply };

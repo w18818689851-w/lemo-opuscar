@@ -1,12 +1,21 @@
 // The Bell Founder — film assembly: timeline, shots, transitions, captions, events
 import * as WC from './engine/index.js';
 import * as ST from './stage.js';
+import { W, H } from './stage.js';       // 当前帧尺寸（stage.setFrame() 定的活绑定；1920×1080 时即设计帧）
 import { clamp, lerp, seg, ss, eio, eo, ei } from '/core/lib.js';
 import { buildWorld, drawValley, snowAt, PW, PH, HOR } from './world.js';
 import { curl, peelState } from './trans.js';
 import { SHOTS, setup as setupShots } from './shots.js';
 
-const W = 1920, H = 1080;
+// 影片元数据：aspects 是**字面量**（lib/aspects.mjs 按文本正则探测，不写 = 只支持 16:9）。
+// 已适配多比例：版面从视口（stage.setFrame() 的 w/h）重排 —— 见 main.js 的 setFrame 与 stage.js 的 IMG。
+export const FILM_META = {
+  id: 'the-bell-founder',
+  title: 'The Bell Founder',
+  style: 'Woodcut Print',
+  aspects: ['16:9', '9:16'],
+};
+
 export let DUR = 58.5, EV = [], SUBS = [];
 let TL, K, DURS = {};
 export const ctx = { K: null, T: null, table: null, printer: null, bufs: [] };

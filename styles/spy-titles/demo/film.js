@@ -1,5 +1,5 @@
 // 全片时间线：表演、镜头、字幕、音效事件。时间全部来自 story.js
-import { g, gMain, C, S, W, H, clear, piece, rough, roughC, rectP, circP, label, setG, silhouette } from './paper.js';
+import { g, gMain, C, ST, S, NATIVE, W, H, setFrame, dXf, clear, piece, rough, roughC, rectP, circP, label, setG, silhouette } from './paper.js';
 import { layout, drawLine } from './glyph.js';
 import { agentSide, agentFront, courierSide, key, keyholeP, runPose, walkPose, coRunPose, AGENT_POSE, COURIER_POSE } from './chars.js';
 import { drawTitle, drawGlyph, CUT_ANG } from './title.js';
@@ -8,6 +8,15 @@ import { cam, CAM, DIR, NRM, KH_SCREEN, RW } from './scenes.js';
 import { subStrip } from './frames.js';
 import { B, BEAT, BAR, DUR, HIT, T } from './story.js';
 import { clamp, lerp, seg, ss, eio, eo, ei, back, hash } from '/core/lib.js';
+
+// 影片元数据：aspects 是**字面量**（lib/aspects.mjs 按文本正则探测，不写 = 只支持 16:9）。
+// 已适配多比例：版面从视口（opts.W/opts.H）重排 —— 见 renderFilm 首行的 setFrame()。
+export const FILM_META = {
+  id: 'velvet-cipher',
+  title: 'The Velvet Cipher',
+  style: '60s Spy Title Sequence',
+  aspects: ['16:9', '9:16'],
+};
 
 export { DUR };
 const tw = t => Math.floor(t * 12 + 1e-6) / 12;       // on twos
@@ -61,7 +70,7 @@ function sSplit(t) {
   if (u >= 1) return;
   const k = KH_SCREEN.h / 154, cx = KH_SCREEN.x, cy = KH_SCREEN.y + 40, big = 3000;
   for (const sd of [-1, 1]) {
-    g.save(); g.setTransform(1, 0, 0, 1, 0, 0);
+    g.save(); dXf();
     g.translate(NRM[0] * sd * u * 1300, NRM[1] * sd * u * 1300);
     g.beginPath();
     g.moveTo(cx - DIR[0] * big, cy - DIR[1] * big); g.lineTo(cx + DIR[0] * big, cy + DIR[1] * big);
@@ -86,13 +95,13 @@ function sVelvet(t) {
     const hx = 940 + DIR[0] * d + 40, hy = 600 + DIR[1] * d;
     glove(hx, hy, 3.4, CUT_ANG + Math.PI, snatched);
   }
-  // 百叶：网格场景按竖条翻走
+  // 百叶：网格场景按竖条翻走（竖条铺满当前帧，内部仍走 dXf 画世界内容）
   if (t < T.blinds + .5) {
-    const n = 12, sw = W / n;
+    const n = 12, sw = NATIVE.W / n;
     for (let i = 0; i < n; i++) {
       const p = ss(seg(t, T.blinds + i * .025, T.blinds + i * .025 + .22));
       if (p >= 1) continue;
-      g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.beginPath(); g.rect(i * sw, 0, sw + 1, H); g.clip();
+      g.save(); dXf(); g.beginPath(); g.rect(i * sw, 0, sw + 1, NATIVE.H); g.clip();
       g.translate(i * sw + sw / 2, 0); g.scale(1 - p, 1); g.translate(-(i * sw + sw / 2), 0);
       drawGridScene(t);
       g.restore();
@@ -318,11 +327,11 @@ function sShatter(t) {
   });
   // 屋顶画面沿平行于切线的长条滑走（North by Northwest 的网格散开）
   const snap = snapRoof(), p0 = t - T.shatter;
-  const n = 11, wS = 260;
+  const n = 11, wS = 260 * S;   // 碎片条是「帧」空间（快照也是帧尺寸）：条宽随紧轴缩放，铺满当前帧
   for (let k = -n; k <= n; k++) {
     const sd = k % 2 ? 1 : -1, d = ei(clamp((p0 - Math.abs(k) * .02) / .75)) * 2600 * sd;
     if (Math.abs(d) >= 2599) continue;
-    const ox = 960 + NRM[0] * k * wS, oy = 540 + NRM[1] * k * wS, big = 2400;
+    const ox = W / 2 + NRM[0] * k * wS, oy = H / 2 + NRM[1] * k * wS, big = 2400;
     g.save(); g.setTransform(1, 0, 0, 1, 0, 0);
     g.beginPath();
     g.moveTo(ox - NRM[0] * wS / 2 - DIR[0] * big, oy - NRM[1] * wS / 2 - DIR[1] * big);
@@ -408,6 +417,7 @@ function sEnd(t) {
 
 // ═══════════════ 总调度 ═══════════════
 export function renderFilm(t, opt = {}) {
+  setFrame(opt.W ?? NATIVE.W, opt.H ?? NATIVE.H);   // 帧尺寸由调用方（视口）定，版面随之重排
   g.setTransform(1, 0, 0, 1, 0, 0);
   if (t < HIT.split) sOpen(t);
   else if (t < T.blinds) { cam(); sSplit(t); }
@@ -416,7 +426,8 @@ export function renderFilm(t, opt = {}) {
     const p = seg(t, T.wipe, T.agentIn + .12), wx = mix(-500, 2600, p);
     sIntro(t);
     g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.beginPath(); g.rect(wx, 0, W, H); g.clip(); sVelvet(t); g.restore();
-    cam(); courierSide(wx + 70, 1290, 1.95, { ...coRunPose(tw(t) * 1.6 % 1), flare: 1 });
+    // wx 是「帧」坐标（划像线扫过视口）；信使画在相机里（设计坐标），换算过去。16:9 时 S=1、偏移 0 ⇒ 不变。
+    cam(); courierSide((wx - (W - NATIVE.W * S) / 2) / S + 70, 1290, 1.95, { ...coRunPose(tw(t) * 1.6 % 1), flare: 1 });
   }
   else if (t < T.airport) sIntro(t);
   else if (t < T.train) sAirport(t);

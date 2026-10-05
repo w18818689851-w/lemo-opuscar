@@ -168,7 +168,7 @@ node lab.mjs stills/cover34_ej.png "lang=ej" cover34.html  # 2160×2880 poster
 
 How the two language versions differ: the only switch is the URL query `?lang=ej`. `render.mjs` and `shot.mjs` add it from `LANGQ` (default `ej`); `scenes.js` reads it into `G.EJ` and changes the second-language lines (intro title, count-up labels, ON YOUR MARKS, cards, chapter cards, end card). `render.mjs` writes EN-JP segments to `out_ej/` and ZH to `out/`; `mux.sh` reads `OUTDIR` (default `out_ej`). Picture timing and music are identical.
 
-`render.mjs` pipes JPEG-100 screenshots into ffmpeg (`libx264 -crf 12`) per worker; `mux.sh` re-encodes the joined film at `-preset slow -crf 14`, 60 fps, GOP 120, AAC 320k, with a 2 s cloned tail so the music's ring-out plays over black.
+`render.mjs` pipes JPEG-100 screenshots into ffmpeg per worker —— **编码器默认走 GPU**（`h264_nvenc -preset p5 -rc vbr -cq <crf+5>`，跟随 `LEMO_VENC`；★ 原为 `libx264 -crf 12`，2026-10-04 起默认改 GPU，显式 `LEMO_VENC=libx264` 才走 CPU）；`mux.sh` 重编成片时**同样跟随该变量**（原为 `-preset slow -crf 14`），60 fps, GOP 120, AAC 320k, with a 2 s cloned tail so the music's ring-out plays over black.
 
 Pitfalls we hit (several are tied to this demo's props):
 

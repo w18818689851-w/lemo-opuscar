@@ -151,6 +151,7 @@ uniform vec3 uL;          // light dir (x right, y down, z up)
 uniform float uNorm, uAmb, uDif, uSpec, uShin, uAO;
 uniform vec3 uGround, uLift, uGain;
 uniform float uSat, uExpo, uVig, uContrast, uWeave;
+uniform float uVigA;      // 暗角横轴权重：设计帧 1.78；竖屏按帧比例换算（全帧效果，不是世界内容）
 uniform vec3 uLightCol;
 float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float H(vec2 uv){ return texture(uH, uv).r; }
@@ -181,7 +182,7 @@ void main(){
   float g = dot(col, vec3(.3, .59, .11));
   col = mix(vec3(g), col, uSat);
   col = uLift + col * (uGain - uLift);
-  vec2 q = vUV - .5; q.x *= 1.78;
+  vec2 q = vUV - .5; q.x *= uVigA;
   col *= 1. - uVig * smoothstep(.35, 1.1, length(q));
   o = vec4(clamp(col, 0., 1.), 1.);
 }`;
@@ -211,7 +212,7 @@ function prog(gl, vs, fs) { const p = gl.createProgram(); gl.attachShader(p, sh(
 
 export const POST_DEFAULT = {
   light: [-.55, -.6, .7], norm: 3.2, amb: .8, dif: .28, spec: .16, shin: 30, ao: 1.2,
-  ground: [.46, .4, .33], lift: [0, 0, 0], gain: [1, 1, 1], sat: 1, expo: 1, vig: .22, contrast: 1, weave: .12, lightCol: [1, .97, .9],
+  ground: [.46, .4, .33], lift: [0, 0, 0], gain: [1, 1, 1], sat: 1, expo: 1, vig: .22, vigA: 1.78, contrast: 1, weave: .12, lightCol: [1, .97, .9],
 };
 
 export class Impasto {
@@ -313,7 +314,7 @@ export class Impasto {
     gl.uniform3fv(u.uL, p.light); gl.uniform1f(u.uNorm, p.norm); gl.uniform1f(u.uAmb, p.amb); gl.uniform1f(u.uDif, p.dif);
     gl.uniform1f(u.uSpec, p.spec); gl.uniform1f(u.uShin, p.shin); gl.uniform1f(u.uAO, p.ao);
     gl.uniform3fv(u.uGround, p.ground); gl.uniform3fv(u.uLift, p.lift); gl.uniform3fv(u.uGain, p.gain);
-    gl.uniform1f(u.uSat, p.sat); gl.uniform1f(u.uExpo, p.expo); gl.uniform1f(u.uVig, p.vig); gl.uniform1f(u.uContrast, p.contrast); gl.uniform1f(u.uWeave, p.weave);
+    gl.uniform1f(u.uSat, p.sat); gl.uniform1f(u.uExpo, p.expo); gl.uniform1f(u.uVig, p.vig); gl.uniform1f(u.uVigA, p.vigA); gl.uniform1f(u.uContrast, p.contrast); gl.uniform1f(u.uWeave, p.weave);
     gl.uniform3fv(u.uLightCol, p.lightCol);
     gl.bindVertexArray(null);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.quad); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);

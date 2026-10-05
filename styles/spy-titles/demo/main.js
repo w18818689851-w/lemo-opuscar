@@ -1,4 +1,4 @@
-import { g, C, clear, paperFinish, label, W, H } from './paper.js';
+import { g, C, clear, paperFinish, label, W, H, setFrame } from './paper.js';
 import { loadFonts } from './glyph.js';
 import { agentSide, agentFront, courierSide, courierFront, key, runPose, walkPose, coRunPose, AGENT_POSE, COURIER_POSE } from './chars.js';
 import { modelSheet } from './sheet.js';
@@ -7,6 +7,12 @@ import { renderFilm, DUR, events, setLines, subs } from './film.js';
 import { titleGeom } from './scenes.js';
 import { drawTitle } from './title.js';
 const Q = new URLSearchParams(location.search);
+// 输出尺寸 = 视口尺寸（渲染器截的是浏览器**视口**，不是 canvas）。canvas 必须跟着视口走，
+// 否则 --size/--ratio 只会把 1920×1080 的画面裁掉一块；版面由 renderFilm() 按实际帧重排。
+const VW = window.innerWidth, VH = window.innerHeight;
+const cv = document.getElementById('c');
+cv.width = VW; cv.height = VH;
+setFrame(VW, VH);
 await Promise.all(['400 40px LGothic', '400 40px LSpartan', '600 40px LSpartan', '700 40px LSpartan', '800 40px LSpartan'].map(f => document.fonts.load(f)));
 await loadFonts();
 const lines = await (await fetch('lines.json')).json();
@@ -28,7 +34,7 @@ window.render = t => {
   }
   if (Q.has('sheet')) { modelSheet(t, Q); paperFinish(); return; }
   if (Q.has('frame')) { frame(Q.get('frame'), t, Q); paperFinish(); return; }
-  renderFilm(t, { nosub: Q.has('nosub') });
+  renderFilm(t, { nosub: Q.has('nosub'), W: VW, H: VH });
   if (Q.has('poster')) {   // 海报：列车定格那一格 + 天上一行纸白片名
     const G = titleGeom();
     g.setTransform(1, 0, 0, 1, 0, 0); g.translate(1235, 150); g.scale(.36, .36); g.translate(-(G.x + G.w / 2), -(G.y + G.h / 2));

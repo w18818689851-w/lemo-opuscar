@@ -1,7 +1,7 @@
 // chars.js — 原创角色：Dr. Vask（厌世天才）、Gary（紧张搭档）、Decaf（会说话的咖啡）
 // 所有角色：局部坐标脚底为原点、y 向下；face=1 朝右（3/4 侧），-1 镜像
 import { clamp, lerp, hash, TAU } from '/core/lib.js';
-import { INK, g, push, pop, translate, rotate, scale, shape, fillOnly, stroke, ell, arc, spline, rr, rect, noodle, quad, dot, text, S, tx, zoom } from './toon.js';
+import { INK, g, push, pop, translate, rotate, scale, shape, fillOnly, stroke, ell, arc, spline, rr, rect, noodle, quad, dot, text, tx, zoom } from './toon.js';
 
 export const PAL = {
   skinV: '#f2c9a0', skinVs: '#d9a57c', stub: '#dcb08e', robe: '#2a9d8f', robeS: '#1c6f66', pj: '#b9a7dc', pjS: '#8e79bd',

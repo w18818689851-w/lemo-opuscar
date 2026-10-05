@@ -1,7 +1,37 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><title>The Lampbearer</title>
 <link rel="stylesheet" href="fonts/fonts.css">
-<style>html,body{margin:0;background:#000;overflow:hidden}#stage,#ov{position:absolute;left:0;top:0}canvas{display:block}</style>
+<style>html,body{margin:0;background:#0b1526;overflow:hidden}#stage,#ov{position:absolute;left:0;top:0}canvas{display:block}</style>
 <script type="importmap">{"imports":{"three":"/node_modules/three/build/three.module.js","three/addons/":"/node_modules/three/examples/jsm/"}}</script>
 </head><body><div id="stage"></div><canvas id="ov" width="1920" height="1080"></canvas>
+<script>
+// ── 视口等比装入（设计帧 1920×1080 → 当前帧 = 视口）────────────────────────────────
+// 影片本体按**固定设计帧 1920×1080** 绘制，一字未改（#stage 的 three.js 画布与 #ov 都是 1920×1080；
+// main.js 的 renderer.setSize(1920,1080) 不跟视口走）。本脚本只做一件事：当前帧不是 1920×1080 时，把
+// **整张设计帧**等比装入（contain）并居中，留边露出页面底色 #0b1526（本风格夜戏的深藏青，取自场景夜空
+// `forest.js` 的 `#132540` 家族；**不是** dub 通路的浅底 `#fff0c8`——那会给夜戏套一圈亮框）。
+// ★ 1920×1080 时**完全不碰 DOM**（不建包装层、不设 transform）⇒ 与改造前逐字节相同。
+(function () {
+  var NW = 1920, NH = 1080, wrap = null;
+  function unwrap() {                              // 回到设计帧尺寸：拆掉包装层，恢复原始 DOM
+    if (!wrap) return;
+    var p = wrap.parentNode;
+    while (wrap.firstChild) p.insertBefore(wrap.firstChild, wrap);
+    p.removeChild(wrap); wrap = null;
+  }
+  function layout() {
+    var W = window.innerWidth, H = window.innerHeight;
+    if (W === NW && H === NH) { unwrap(); return; }          // 设计帧 = 当前帧 ⇒ 原样
+    var k = Math.min(W / NW, H / NH);                        // 等比装入的紧轴缩放
+    if (!wrap) {
+      var st = document.getElementById('stage'), ov = document.getElementById('ov');
+      wrap = document.createElement('div');
+      wrap.style.cssText = 'position:absolute;left:0;top:0;width:' + NW + 'px;height:' + NH + 'px;transform-origin:0 0';
+      st.parentNode.insertBefore(wrap, st); wrap.appendChild(st); wrap.appendChild(ov);
+    }
+    wrap.style.transform = 'translate(' + ((W - k * NW) / 2) + 'px,' + ((H - k * NH) / 2) + 'px) scale(' + k + ')';
+  }
+  layout(); addEventListener('resize', layout);
+})();
+</script>
 <script type="module" src="main.js"></script></body></html>

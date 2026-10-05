@@ -1,7 +1,16 @@
 // 剪纸 + 丝网平涂引擎：4 色纸、剪刀毛边（局部坐标里剪一次，形状跟着纸片走，不"沸腾"）、切缝、纸影、纸纹
 import { hash, vnoise, clamp } from '/core/lib.js';
 
-export const W = 1920, H = 1080;
+// 帧尺寸不是常量：渲染器截的是浏览器**视口**，`--size/--ratio` 会改它。NATIVE 是设计帧（1920×1080）。
+// renderFilm 首行按实际帧调 setFrame()：位置按轴拉伸（×FX/×FY）、尺寸按紧轴缩放（×S）、相机 zoom ×S。
+// 1920×1080 时 FX = FY = S = 1，每个表达式退化成它替换掉的那个数字 ⇒ 16:9 逐字节不变。
+// 顶层不许算几何：W/H 只在 setFrame() 里被赋值。
+export const NATIVE = { W: 1920, H: 1080 };
+export let W = NATIVE.W, H = NATIVE.H, FX = 1, FY = 1, S = 1;
+export function setFrame(w, h) { W = w; H = h; FX = w / NATIVE.W; FY = h / NATIVE.H; S = Math.min(FX, FY); }
+// 设计帧(1920×1080) → 当前帧的「等比装入」变换：屏幕空间的内容（视差远景、划像、碎片条…）
+// 也走它才能和相机里的世界内容对齐。1920×1080 时 S=1、偏移 0 ⇒ 与 setTransform(1,0,0,1,0,0) 逐位相同。
+export function dXf() { g.setTransform(S, 0, 0, S, (W - NATIVE.W * S) / 2, (H - NATIVE.H * S) / 2); }
 export const C = {
   ink: '#1b1714', paper: '#efe4c9', red: '#d23a22', mus: '#e2a52a',
   redD: '#9a2a18', musD: '#b07e1c', paperD: '#d9ccae', inkL: '#3a322b',
@@ -12,8 +21,9 @@ export let g = gMain;   // 活绑定：画剪影图层时临时指向图层
 export function setG(c) { g = c; }
 
 // ── 场景状态：切缝颜色 = 当前场景底色（纸片之间露出的底板） ──
-export const S = { bg: C.paper, gap: 2.4, shadow: true, shAlpha: .30 };
-export function clear(col) { S.bg = col; const m = g.getTransform(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; g.fillStyle = col; g.fillRect(0, 0, W, H); g.setTransform(m); }   // 保留摄像机变换
+// 场景/纸张状态（原名 S，与上面派生的紧轴缩放 S 重名 → 改名 ST）
+export const ST = { bg: C.paper, gap: 2.4, shadow: true, shAlpha: .30 };
+export function clear(col) { ST.bg = col; const m = g.getTransform(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; g.fillStyle = col; g.fillRect(0, 0, W, H); g.setTransform(m); }   // 保留摄像机变换
 
 // 当前变换的缩放（切缝/描边要保持屏幕像素宽）
 export function curScale(ctx = g) { const m = ctx.getTransform(); return Math.sqrt(Math.abs(m.a * m.d - m.b * m.c)) || 1; }
@@ -53,17 +63,17 @@ export function piece(polys, col, opt = {}, ctx = g) {
   if (!Array.isArray(polys[0][0])) polys = [polys];
   const sc = curScale(ctx);
   ctx.beginPath(); for (const p of polys) pathPoly(ctx, p);
-  if (S.inLayer && !opt.force) {   // 剪影图层里：纸片直接融成一个外轮廓；opt.cut = 挖一圈透明缝
+  if (ST.inLayer && !opt.force) {   // 剪影图层里：纸片直接融成一个外轮廓；opt.cut = 挖一圈透明缝
     if (opt.cut) { ctx.save(); ctx.globalCompositeOperation = 'destination-out'; ctx.lineJoin = 'round'; ctx.lineWidth = opt.cut * 2 / sc; ctx.stroke(); ctx.restore(); }
     ctx.fillStyle = col; ctx.fill('evenodd'); return;
   }
-  const gap = opt.gap ?? S.gap;
+  const gap = opt.gap ?? ST.gap;
   if (gap > 0 && opt.gapCol !== null) {
-    ctx.lineJoin = 'round'; ctx.lineWidth = gap * 2 / sc; ctx.strokeStyle = opt.gapCol || S.bg; ctx.stroke();
+    ctx.lineJoin = 'round'; ctx.lineWidth = gap * 2 / sc; ctx.strokeStyle = opt.gapCol || ST.bg; ctx.stroke();
   }
-  if ((opt.shadow ?? S.shadow) && !ctx.__noShadow) {
+  if ((opt.shadow ?? ST.shadow) && !ctx.__noShadow) {
     ctx.save();
-    ctx.shadowColor = `rgba(20,12,6,${opt.shA ?? S.shAlpha})`; ctx.shadowBlur = (opt.shB ?? 5);
+    ctx.shadowColor = `rgba(20,12,6,${opt.shA ?? ST.shAlpha})`; ctx.shadowBlur = (opt.shB ?? 5);
     ctx.shadowOffsetX = opt.shX ?? 2.5; ctx.shadowOffsetY = opt.shY ?? 3.5;
     ctx.fillStyle = col; ctx.fill('evenodd'); ctx.restore();
   } else { ctx.fillStyle = col; ctx.fill('evenodd'); }
@@ -135,13 +145,13 @@ export function silhouette(fn, opt = {}) {
   if (!LC) { LC = document.createElement('canvas'); LC.width = W; LC.height = H; LT = document.createElement('canvas'); LT.width = W; LT.height = H; }
   const L = LC.getContext('2d'), T2 = LT.getContext('2d'), main = g;
   L.setTransform(1, 0, 0, 1, 0, 0); L.clearRect(0, 0, W, H); L.setTransform(main.getTransform());
-  g = L; S.inLayer = true;
-  try { fn(); } finally { g = main; S.inLayer = false; }
-  const r = opt.outline ?? S.gap;
+  g = L; ST.inLayer = true;
+  try { fn(); } finally { g = main; ST.inLayer = false; }
+  const r = opt.outline ?? ST.gap;
   main.save(); main.setTransform(1, 0, 0, 1, 0, 0);
   if (r > 0) {
     T2.setTransform(1, 0, 0, 1, 0, 0); T2.globalCompositeOperation = 'source-over'; T2.clearRect(0, 0, W, H); T2.drawImage(LC, 0, 0);
-    T2.globalCompositeOperation = 'source-in'; T2.fillStyle = opt.outlineCol || S.bg; T2.fillRect(0, 0, W, H); T2.globalCompositeOperation = 'source-over';
+    T2.globalCompositeOperation = 'source-in'; T2.fillStyle = opt.outlineCol || ST.bg; T2.fillRect(0, 0, W, H); T2.globalCompositeOperation = 'source-over';
     for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; main.drawImage(LT, Math.cos(a) * r, Math.sin(a) * r); }
   }
   if (opt.shadow ?? true) { main.shadowColor = `rgba(20,12,6,${opt.shA ?? .32})`; main.shadowBlur = 5; main.shadowOffsetX = 3; main.shadowOffsetY = 4; }

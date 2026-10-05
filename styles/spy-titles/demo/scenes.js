@@ -1,13 +1,13 @@
 // 片中各场景的"世界"绘制（世界坐标 + 摄像机）。角色表演、时间线在 film.js
-import { g, C, S, W, H, clear, piece, rough, roughC, rectP, circP, ellP, arcP, label } from './paper.js';
+import { g, C, ST, S, NATIVE, W, H, dXf, clear, piece, rough, roughC, rectP, circP, ellP, arcP, label } from './paper.js';
 import { layout, drawLine } from './glyph.js';
 import { agentSide, courierSide, key, keyholeP } from './chars.js';
 import { drawTitle, titleBox, drawGlyph, CUT_ANG, GLYPH } from './title.js';
 import { hash, clamp, lerp } from '/core/lib.js';
 
-// ── 摄像机：世界点 (cx,cy) 放在画面中心，缩放 s ──
+// ── 摄像机：世界点 (cx,cy) 放在画面中心，缩放 s；再乘紧轴缩放 S（竖屏把整张设计帧装进来，全图可见） ──
 export const CAM = { cx: 960, cy: 540, s: 1 };
-export function cam(cx = 960, cy = 540, s = 1) { CAM.cx = cx; CAM.cy = cy; CAM.s = s; g.setTransform(s, 0, 0, s, W / 2 - cx * s, H / 2 - cy * s); }
+export function cam(cx = 960, cy = 540, s = 1) { const z = s * S; CAM.cx = cx; CAM.cy = cy; CAM.s = z; g.setTransform(z, 0, 0, z, W / 2 - cx * z, H / 2 - cy * z); }
 export function view(m = 60) { const hw = W / 2 / CAM.s + m, hh = H / 2 / CAM.s + m; return { x0: CAM.cx - hw, x1: CAM.cx + hw, y0: CAM.cy - hh, y1: CAM.cy + hh }; }
 export const DIR = [Math.sin(CUT_ANG), -Math.cos(CUT_ANG)];   // 斜切线方向（向右上）
 export const NRM = [Math.cos(CUT_ANG), Math.sin(CUT_ANG)];    // 法线（向右下）
@@ -67,7 +67,7 @@ export function velvet(o = {}) {
 export function introSet() {
   clear(C.paper);
   piece(roughC('introSlash', () => [[1180, -40], [1520, -40], [820, 1120], [480, 1120]], 970, 2, 20), C.red, { gap: 0, shadow: false });
-  piece(roughC('introFloor', () => rectP(-40, 880, W + 80, 260), 971, 1.4, 14), C.ink, { gap: 0, shadow: false });
+  piece(roughC('introFloor', () => rectP(-40, 880, NATIVE.W + 80, 260), 971, 1.4, 14), C.ink, { gap: 0, shadow: false });
 }
 
 // ═══════════ 机场 ═══════════
@@ -121,9 +121,9 @@ export function trainLayout() {
 export function train(o) {
   clear(C.red);
   const t = o.t || 0, v = view(200), scroll = t * TR.speed;
-  // 远山（屏幕空间视差）
-  g.save(); g.setTransform(1, 0, 0, 1, 0, 0);
-  const ss = CAM.s, sy = (y) => H / 2 + (y - CAM.cy) * ss * .6;
+  // 远山（屏幕空间视差 → 走 dXf，与相机里的世界内容对齐）
+  g.save(); dXf();
+  const ss = CAM.s, sy = (y) => NATIVE.H / 2 + (y - CAM.cy) * ss * .6;
   for (let k = 0; k < 2; k++) {
     const off = -((CAM.cx * ss * (.1 + k * .1) + scroll * (.08 + k * .1)) % 1600);
     for (let r = -1; r < 3; r++) {
@@ -177,8 +177,8 @@ export function train(o) {
 export const RW = { x: 960, y: 470, r: 170 };
 export function wheelShot(t) {
   clear(C.red);
-  piece(rough(rectP(-20, RW.y + RW.r - 8, W + 40, 20), 750, 1, 14), C.paper, { gap: 0, shadow: false });
-  piece(rough(rectP(-20, RW.y + RW.r + 12, W + 40, 500), 751, 1.4, 14), C.ink, { gap: 0, shadow: false });
+  piece(rough(rectP(-20, RW.y + RW.r - 8, NATIVE.W + 40, 20), 750, 1, 14), C.paper, { gap: 0, shadow: false });
+  piece(rough(rectP(-20, RW.y + RW.r + 12, NATIVE.W + 40, 500), 751, 1.4, 14), C.ink, { gap: 0, shadow: false });
   piece(roughC('bigWheel', () => circP(0, 0, RW.r, 60), 752, 1.6, 12).map(([a, b]) => [a + RW.x, b + RW.y]), C.ink);
   g.save(); g.translate(RW.x, RW.y); g.rotate(-Math.floor(t * 12) / 12 * 9);
   for (let i = 0; i < 6; i++) { g.save(); g.rotate(i * Math.PI / 3); piece([[-6, 26], [6, 26], [5, RW.r - 22], [-5, RW.r - 22]], C.red, { gap: 0, shadow: false }); g.restore(); }
@@ -202,7 +202,7 @@ export function casino(o) {
   clear(C.red);
   // 桌面边框（纸白细线）+ 下注格
   const cl = casinoLayout();
-  g.save(); g.strokeStyle = 'rgba(239,228,201,.8)'; g.lineWidth = 3; g.strokeRect(70, 60, W - 140, H - 120); g.restore();
+  g.save(); g.strokeStyle = 'rgba(239,228,201,.8)'; g.lineWidth = 3; g.strokeRect(70, 60, NATIVE.W - 140, NATIVE.H - 120); g.restore();
   for (let i = 0; i < 12; i++) {
     const x = 300 + i * 110, y = 810;
     piece(roughC('cell' + i, () => rectP(0, 0, 100, 150), 1000 + i, 1, 10).map(([a, b]) => [a + x, b + y]), i % 2 ? C.ink : C.redD, { gap: 0, shA: .2 });
@@ -250,7 +250,7 @@ export function pupilShot(pr) {
   piece(ellP(x - RW.r * .35, y - RW.r * .4, 22, 14, 16, -.5), 'rgba(239,228,201,.9)', { gap: 0, shadow: false });
   g.restore();
   // 帽檐的阴影压在上方
-  piece(roughC('brimBand', () => [[-40, -40], [W + 40, -40], [W + 40, 150], [-40, 230]], 1101, 2, 20), C.ink, { gap: 0 });
+  piece(roughC('brimBand', () => [[-40, -40], [NATIVE.W + 40, -40], [NATIVE.W + 40, 150], [-40, 230]], 1101, 2, 20), C.ink, { gap: 0 });
 }
 
 // ═══════════ 屋顶 ═══════════
@@ -258,8 +258,8 @@ export const RF = { ledge: 720, end: 2500 };
 export function rooftop(o) {
   clear(C.ink);
   const v = view(200);
-  // 月亮（屏幕空间固定 = 远景）
-  g.save(); g.setTransform(1, 0, 0, 1, 0, 0);
+  // 月亮（屏幕空间固定 = 远景 → 走 dXf，与相机里的世界内容对齐）
+  g.save(); dXf();
   const mr = o.moonR ?? 330, mx = o.moonX ?? 960, my = o.moonY ?? 430;
   piece(roughC('moon', () => circP(0, 0, 1, 90), 1200, .004, .06).map(([a, b]) => [mx + a * mr, my + b * mr]), C.paper, { gap: 0, shadow: false });
   // 远处楼群（屏幕空间，慢视差）
@@ -283,7 +283,7 @@ export function rooftop(o) {
 export const TT = { H: 250 };
 export function titleGeom() {
   const { w, h, L } = titleBox(TT.H);
-  const x = (W - w) / 2 - 50, y = (H - h) / 2 - 20;
+  const x = (NATIVE.W - w) / 2 - 50, y = (NATIVE.H - h) / 2 - 20;
   const li = L.find(l => l.ch === 'I'), kh = li.h * .62 / 154;
   const khx = x + li.x + li.w / 2, khy = y + li.y + li.h * .2 + 31 * kh;
   return { x, y, w, h, L, kh, khx, khy, cutX: khx - x, cutY: khy - y };

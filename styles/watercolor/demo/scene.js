@@ -221,7 +221,7 @@ function drawPlants(lay, t, cx, cy, hook) {
     if (X + pl.spr.x1 < -60 || X + pl.spr.x0 > W + 60) continue;
     const p = plantP(pl, t, X); if (p <= 0) continue;
     const sk = pl.sway ? pl.sway * Math.sin(t * 1.15 + pl.ph) + pl.sway * .4 * Math.sin(t * 2.7 + pl.ph * 2) : 0;
-    ctx.setTransform(1, 0, sk, 1, X, Y); ctx.globalAlpha = (pl.alpha ?? L.alpha) * (pl.cxFade ? 1 - ss(seg(cx, pl.cxFade[0], pl.cxFade[1])) : 1); if (ctx.globalAlpha <= 0) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; continue; }
+    fit(1, 0, sk, 1, X, Y); ctx.globalAlpha = (pl.alpha ?? L.alpha) * (pl.cxFade ? 1 - ss(seg(cx, pl.cxFade[0], pl.cxFade[1])) : 1); if (ctx.globalAlpha <= 0) { fit(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; continue; }
     if (pl.fire && t > pl.fire.ft + .2) {
       const c = seg(t, pl.fire.ft + .2, pl.fire.ft + 1.5);
       if (c < 1) { ctx.globalAlpha = L.alpha * (1 - c); ctx.drawImage(pl.spr.cv, pl.spr.x0, pl.spr.y0); }
@@ -231,7 +231,7 @@ function drawPlants(lay, t, cx, cy, hook) {
     } else if (p >= 1) ctx.drawImage(pl.spr.cv, pl.spr.x0, pl.spr.y0);
     else drawList(ctx, pl.st, p);
     if (hook) hook(pl, X, Y, sk, p);
-    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1;
+    fit(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1;
   }
 }
 const zoneW = (cx, name) => { const [, a, b] = ZONES.find(z => z[0] === name); return clamp(1 - Math.max(a - cx, cx - b, 0) / 500); };
@@ -269,10 +269,10 @@ function drawHorizon(t, cx, cy) {
   const sweep = lerp(-100, 2050, eio(seg(t, .5, 2.8)));
   for (const h of HORIZ) {
     const X = 960 + h.wx - cx; if (X > W || X + 700 < 0) continue;
-    ctx.setTransform(1, 0, 0, 1, 960 - cx, cy);
+    fit(1, 0, 0, 1, 960 - cx, cy);
     drawS(ctx, h.s, clamp((sweep - X) / 660));
   }
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  fit(1, 0, 0, 1, 0, 0);
 }
 function mistBand(y0, y1, a, col = PAPER) {
   if (a <= 0) return; const g = ctx.createLinearGradient(0, y0, 0, y1);
@@ -468,7 +468,7 @@ function mulgaRain(t, pl, X, Y) {
   if (t < 26.4 || t > 34) return;
   const g = pl.g, vis = 1 - ss(seg(t, 33, 34));
   // 云
-  ctx.save(); ctx.setTransform(1, 0, 0, 1, X, Y);
+  ctx.save(); fit(1, 0, 0, 1, X, Y);
   const ca = ss(seg(t, 26.4, 27.2)) * (1 - ss(seg(t, 31.5, 33)));
   if (!pl.cloud) pl.cloud = withSeed(12, () => sprite(cloud(.8, '#8fa2aa').S));
   ctx.globalAlpha = ca; ctx.drawImage(pl.cloud.cv, pl.cloud.x0, pl.cloud.y0 - 330); ctx.globalAlpha = 1;
@@ -504,8 +504,8 @@ function drawLandscape(t) {
   drawAsh(t, cx, cy);
   drawPlants('main', t, cx, cy, (pl, X, Y, sk, p) => {
     if (pl === HERO.mulga) mulgaRain(t, pl, X, Y);
-    if (pl === HERO.koala && p >= 1 && t > 35 && t < 44) { const [fx, fy] = pl.g.fork; ctx.setTransform(1, 0, sk, 1, X, Y); koala(fx + 6, fy + 22, 1.25, ss(seg(t, 35.2, 36.2)), t); }
-    if (pl === HERO.ash) { ctx.setTransform(1, 0, 0, 1, X, Y); tinyHuman(90, 0); }
+    if (pl === HERO.koala && p >= 1 && t > 35 && t < 44) { const [fx, fy] = pl.g.fork; fit(1, 0, sk, 1, X, Y); koala(fx + 6, fy + 22, 1.25, ss(seg(t, 35.2, 36.2)), t); }
+    if (pl === HERO.ash) { fit(1, 0, 0, 1, X, Y); tinyHuman(90, 0); }
   });
   // 袋鼠：落地卡在音乐拍点上
   if (t > 13.5 && t < 31) {

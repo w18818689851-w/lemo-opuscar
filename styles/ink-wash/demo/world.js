@@ -5,6 +5,7 @@ import { hero, POSE, mixPose } from './hero.js';
 import { ridgeFn, mountainLayer, cun, cliff, pine, vn2 } from './land.js';
 import { seal } from './seal.js';
 import { T } from './story.js';
+import { W as FW, H as FH, S, OX, OY } from './comp.js';
 import { clamp, lerp, ss, eio, eo, mulberry } from '/core/lib.js';
 
 export const WW = 5600, WH = 1080;
@@ -47,8 +48,12 @@ export function init() {
   }
 }
 
-// 世界 → 屏幕
-export const camXf = cam => ({ s: cam.z, tx: 960 - cam.x * cam.z, ty: 540 - cam.y * cam.z });
+// 世界 → 屏幕：相机矩阵 = 「设计帧 → 当前帧」等比装入(S, 居中偏移) ∘ 世界 → 设计帧的取景。
+// 世界坐标只走这里一次（不再单独乘 FX/FY）。1920×1080 时 S=1、偏移 0 ⇒ 与改造前逐位相同。
+export const camXf = cam => {
+  const s = cam.z * S;
+  return { s, tx: OX + S * (960 - cam.x * cam.z), ty: OY + S * (540 - cam.y * cam.z) };
+};
 export function blit(A, lay, cam, am = 1) {
   const { s, tx, ty } = camXf(cam);
   for (const k of ['wet', 'dry']) { const c = A.ink[k]; c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = am; c.drawImage(lay[k], tx, ty, WW * s, WH * s); c.restore(); }
@@ -82,16 +87,16 @@ function blitReveal(A, TMP, lay, cam, center, R) {
   const M = revealMasks(cam, center, R);
   const { s, tx, ty } = camXf(cam);
   for (const k of ['wet', 'dry']) {
-    const c = TMP.ink[k]; c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1; c.clearRect(0, 0, 1920, 1080);
+    const c = TMP.ink[k]; c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1; c.clearRect(0, 0, FW, FH);
     c.drawImage(lay[k], tx, ty, WW * s, WH * s);
-    c.globalCompositeOperation = 'destination-in'; c.imageSmoothingEnabled = true; c.drawImage(M.m, 0, 0, 1920, 1080);
+    c.globalCompositeOperation = 'destination-in'; c.imageSmoothingEnabled = true; c.drawImage(M.m, 0, 0, FW, FH);
     c.globalCompositeOperation = 'source-over';
     A.ink[k].save(); A.ink[k].setTransform(1, 0, 0, 1, 0, 0); A.ink[k].drawImage(TMP[k], 0, 0); A.ink[k].restore();
   }
   // 前沿积墨：层的湿墨 × 前沿带
-  const c = TMP.ink.wet; c.clearRect(0, 0, 1920, 1080);
+  const c = TMP.ink.wet; c.clearRect(0, 0, FW, FH);
   c.drawImage(lay.wet, tx, ty, WW * s, WH * s);
-  c.globalCompositeOperation = 'destination-in'; c.drawImage(M.r, 0, 0, 1920, 1080); c.globalCompositeOperation = 'source-over';
+  c.globalCompositeOperation = 'destination-in'; c.drawImage(M.r, 0, 0, FW, FH); c.globalCompositeOperation = 'source-over';
   A.cw.save(); A.cw.setTransform(1, 0, 0, 1, 0, 0); A.cw.globalAlpha = .9; A.cw.drawImage(TMP.wet, 0, 0); A.cw.drawImage(TMP.wet, 0, 0); A.cw.restore();
 }
 

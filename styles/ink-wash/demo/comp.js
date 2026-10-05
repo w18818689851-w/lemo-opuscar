@@ -1,6 +1,18 @@
 // 宣纸合成器（WebGL2）
 // 每个画面三张 2D 画布：wet（湿墨，晕开 + 边缘积墨 + 颗粒）、dry（干墨，纸纹咬边）、col（朱砂、绫裱等颜色层）。
 // 两套画面 A/B 用"墨晕"蒙版转场：新画面从一团正在扩散的墨里长出来，前沿有一圈深色水线。
+//
+// 帧尺寸不是常量：渲染器截的是浏览器**视口**，--size/--ratio 会改它。NATIVE 是设计帧（1920×1080）。
+// 手卷世界（山/水/人/字）走「设计帧 → 当前帧」的**等比装入**：相机 camXf 里折进 S 与居中偏移，
+// 屏幕空间的家什（题跋字幕、片尾卡、绫裱案面）也走同一套 fit（×S + 居中偏移）。
+// 1920×1080 时 S = 1、偏移 0 ⇒ 每个表达式退化成它替换掉的那个数字 ⇒ 16:9 逐字节不变。
+// 顶层不许算几何：W/H/FX/FY/S/OX/OY 只在 setFrame() 里被赋值。
+export const NATIVE = { W: 1920, H: 1080 };
+export let W = NATIVE.W, H = NATIVE.H, FX = 1, FY = 1, S = 1, OX = 0, OY = 0;
+export function setFrame(w, h) {
+  W = w; H = h; FX = w / NATIVE.W; FY = h / NATIVE.H; S = Math.min(FX, FY);
+  OX = (W - NATIVE.W * S) / 2; OY = (H - NATIVE.H * S) / 2;   // 等比装入的居中偏移
+}
 const VS = `#version 300 es
 in vec2 p; void main(){ gl_Position = vec4(p,0,1); }`;
 const FS = `#version 300 es

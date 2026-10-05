@@ -115,6 +115,36 @@ export function inPoly(polys, x, y) {
 }
 // inside any of several (possibly overlapping) rings
 export const inAny = (polys, x, y) => { for (const p of polys) if (inPoly([p], x, y)) return true; return false; };
+// Bounds for a set of rings, so a hot point-in-any loop can reject most rings with a box test
+// instead of ray-casting every vertex of every ring. A point outside a ring's bounding box is
+// never inside that ring, so skipping it cannot change the answer — prepareRings/inAnyPrepared
+// always agree with inAny. Tolerates an empty list, a single ring, and degenerate rings.
+//
+// THE CALLER OWNS THE LIFETIME. Do NOT memoise these bounds inside inAny/inAnyPrepared keyed on
+// the array reference: callers legitimately hand us a scratch ring list that starts empty and is
+// filled in place afterwards. Caching on first sight would freeze the empty box
+// [Infinity, Infinity, -Infinity, -Infinity], whose `x < ux0` test is true for every point, so
+// every later query would wrongly answer "not inside any ring". That is not hypothetical: it
+// silently changed a rendered frame (subjects/coffee.js -> outline() -> inAny(excl, ...)).
+// Build the bounds once where the array's lifetime is known, and pass them down.
+export function prepareRings(polys) {
+  let ux0 = Infinity, uy0 = Infinity, ux1 = -Infinity, uy1 = -Infinity;
+  const bb = new Array(polys.length);
+  for (let i = 0; i < polys.length; i++) {
+    const poly = polys[i];
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (let k = 0; k < poly.length; k++) { const px = poly[k][0], py = poly[k][1]; if (px < x0) x0 = px; if (px > x1) x1 = px; if (py < y0) y0 = py; if (py > y1) y1 = py; }
+    bb[i] = [x0, y0, x1, y1];
+    if (x0 < ux0) ux0 = x0; if (x1 > ux1) ux1 = x1; if (y0 < uy0) uy0 = y0; if (y1 > uy1) uy1 = y1;
+  }
+  return { polys, bb, ux0, uy0, ux1, uy1 };
+}
+export const inAnyPrepared = (P, x, y) => {
+  if (x < P.ux0 || x > P.ux1 || y < P.uy0 || y > P.uy1) return false;
+  const polys = P.polys, bb = P.bb;
+  for (let i = 0; i < polys.length; i++) { const b = bb[i]; if (x < b[0] || x > b[2] || y < b[1] || y > b[3]) continue; if (inPoly([polys[i]], x, y)) return true; }
+  return false;
+};
 export function resample(pts, step) {
   const out = [pts[0]]; let acc = 0;
   for (let i = 1; i < pts.length; i++) {

@@ -1584,5 +1584,39 @@ window.render = render;
 init();
 
 </script>
+<script>
+// ── 视口等比装入（设计帧 1920×1080 → 当前帧 = 视口）────────────────────────────────
+// 影片本体按**固定设计帧 1920×1080** 绘制，一字未改（#stage 的 SVG 与 #paper/#fx 画布都是 1920×1080）。
+// 本脚本只做一件事：当前帧不是 1920×1080 时，把**整张设计帧**等比装入（contain）并居中，留边露出
+// 页面底色 #F4ECDD（本风格的米色纸底）。★ 1920×1080 时**完全不碰 DOM**（不建包装层、不设 transform、
+// 不改 body 尺寸）⇒ 与改造前逐字节相同。声明见 demo/film.js 的 FILM_META.aspects（控制台按源码文本探测）。
+(function () {
+  var NW = 1920, NH = 1080, wrap = null;
+  function unwrap() {                              // 回到设计帧尺寸：拆掉包装层，恢复原始 DOM
+    if (!wrap) return;
+    var p = wrap.parentNode;
+    while (wrap.firstChild) p.insertBefore(wrap.firstChild, wrap);
+    p.removeChild(wrap); wrap = null;
+    document.body.style.width = ''; document.body.style.height = '';
+  }
+  function layout() {
+    var W = window.innerWidth, H = window.innerHeight;
+    if (W === NW && H === NH) { unwrap(); return; }          // 设计帧 = 当前帧 ⇒ 原样
+    var k = Math.min(W / NW, H / NH);                        // 等比装入的紧轴缩放
+    var ids = ['stage', 'paper', 'fx'];
+    if (!wrap) {
+      var first = document.getElementById(ids[0]);
+      wrap = document.createElement('div');
+      wrap.style.cssText = 'position:absolute;left:0;top:0;width:' + NW + 'px;height:' + NH + 'px;transform-origin:0 0';
+      first.parentNode.insertBefore(wrap, first);
+      for (var i = 0; i < ids.length; i++) wrap.appendChild(document.getElementById(ids[i]));
+    }
+    document.body.style.width = W + 'px';           // body 原为固定 1920×1080，放大到当前帧，留边才是底色
+    document.body.style.height = H + 'px';
+    wrap.style.transform = 'translate(' + ((W - k * NW) / 2) + 'px,' + ((H - k * NH) / 2) + 'px) scale(' + k + ')';
+  }
+  layout(); addEventListener('resize', layout);
+})();
+</script>
 </body>
 </html>

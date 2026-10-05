@@ -1,5 +1,5 @@
 // 正片时间线：一镜到底在同一页画上移动；45s 后拉出成书页（end.js）
-import { layer, clear, line, fill, dab, text, handCircle, ellipse, CAM, BOIL, W, H, sx, sy } from './crayon.js';
+import { layer, clear, line, fill, dab, text, handCircle, ellipse, CAM, BOIL, W, sx, sy, NATIVE, S, setFrame, fitX, fitY } from './crayon.js';
 import { group, clearGroup, part } from './rig.js';
 import { girl, sheep, moon, star } from './chars.js';
 import { drawWorld, drawLadder, drawStars, drawWash, bandFront, BANDS, STARS, HOUSE, MOON, LAD, ridgeY, pr } from './world.js';
@@ -10,6 +10,15 @@ const K = PAL.crayon;
 const POSTER = new URLSearchParams(location.search).get('poster') === '1';
 export const DUR = 52;
 const BPM = 72, BEAT = 60 / BPM, BAR = BEAT * 3;
+
+// 影片元数据：aspects 是**字面量**（lib/aspects.mjs 按文本正则探测，不写 = 只支持 16:9）。
+// 已适配多比例：版面从视口（frame 的 w/h）重排 —— 见 frame() 首行的 setFrame()。
+export const FILM_META = {
+  id: 'the-moon-cant-sleep',
+  title: "The Moon Can't Sleep",
+  style: 'Crayon Picture Book',
+  aspects: ['16:9', '9:16'],
+};
 
 // —— 旁白与字幕（v3 声线 af_heart；t = 语音起点；字幕停留 ≥1.8s 且 ≥ 语音 + 0.6s）——
 export const LINES = [
@@ -67,14 +76,14 @@ ev(46.0, 'room'); ev(47.6, 'page', { dur: 1.2 });
 [['A', 0], ['B', 7.5], ['C', 15], ['D', 20], ['E', 27.5], ['F', 37.5], ['G', 45]].forEach(([id, t]) => ev(t, 'cue', { id }));
 
 // —— 层 ——
-const STAR = group(), BG = { f: layer(), l: layer() }, MN = group(), SH = group(), GL = group(), WASH = layer(), FX = layer(), SUBK = layer(), SUBT = layer();
+const STAR = group(), BG = { f: layer(), l: layer() }, MN = group(), SH = group(), GL = group(), WASH = layer(), SPK = layer(), SUBK = layer(), SUBT = layer();
 const wo = (x, y) => [x, y];
 
 // 女孩的状态机：返回 girl() 参数
 const SEAT = [1452, 1032];
 function girlState(t) {
   const sheepIn = (P, o = {}) => (Pp) => sheep(GL, { x: Pp([o.at || [4, -128]])[0][0], y: Pp([o.at || [4, -128]])[0][1], s: o.s ?? 0.78, r: o.r ?? 0, flip: o.flip, seed: 3350, eyesClosed: o.closed });
-  const S = 0.56;
+  const GS = 0.56;
   if (t < 19.75) {
     // 被窝里：17.8 抬头，18.33 起挥手，笑
     const waving = t > 18.2 && t < 19.6;
@@ -84,7 +93,7 @@ function girlState(t) {
   }
   if (t < 20.2) {  // 从窗口跳下来
     const u = pr(t, 19.75, 20.2); const x = lerp(1560, 1740, u), y = lerp(1560, 1640, u) - 90 * Math.sin(u * Math.PI);
-    return { x, y, s: S, view: 'side', pose: 'stand', expr: 'awake', seed: 3000, sheep: sheepIn(null, { at: [-6, -130], flip: true }) };
+    return { x, y, s: GS, view: 'side', pose: 'stand', expr: 'awake', seed: 3000, sheep: sheepIn(null, { at: [-6, -130], flip: true }) };
   }
   if (t < 24.0) {  // 背面爬梯
     let n = -1; for (let i = 0; i < STEP_T.length; i++) if (t >= STEP_T[i]) n = i;
@@ -92,13 +101,13 @@ function girlState(t) {
     const tn = n >= 0 ? STEP_T[n] : 20.2; const u = eo(pr(t, tn, tn + 0.22));
     const y = n >= 0 ? lerp(yOf(n - 1), yOf(n), u) : 1640;
     const reach = t < STEP_T[0] ? (t > 20.3 ? 1 : 0) : 0;
-    return { x: 1792, y, s: S, view: 'back', pose: 'climb', ph: (n + 1) % 2, expr: 'awake', seed: 3000, sheep: sheepIn(null, { at: [4, -128], r: -0.2 }) };
+    return { x: 1792, y, s: GS, view: 'back', pose: 'climb', ph: (n + 1) % 2, expr: 'awake', seed: 3000, sheep: sheepIn(null, { at: [4, -128], r: -0.2 }) };
   }
   if (t < 26.25) { // 上屋顶，往屋脊走（侧面朝左）
     const u = pr(t, 24.3, 26.2); const x = lerp(1850, SEAT[0] + 20, u), y = lerp(1306, SEAT[1] + 2, u) - Math.abs(Math.sin(u * Math.PI * 4)) * 10;
     const ph = Math.floor(t * 4) % 2;
     const legs = ph ? [[[4, -90], [14, -50], [18, -12]], [[-6, -90], [-14, -50], [-20, -12]]] : [[[4, -90], [-6, -50], [-10, -12]], [[-6, -90], [6, -50], [10, -12]]];
-    return { x, y, s: S, view: 'side', pose: 'stand', flip: true, legs, r: 0.12, expr: 'awake', seed: 3000, sheep: sheepIn(null, { at: [-8, -130], flip: true }) };
+    return { x, y, s: GS, view: 'side', pose: 'stand', flip: true, legs, r: 0.12, expr: 'awake', seed: 3000, sheep: sheepIn(null, { at: [-8, -130], flip: true }) };
   }
   // 坐在屋脊上
   let expr = 'awake';
@@ -107,11 +116,11 @@ function girlState(t) {
   else if (t >= 43.2 && t < 44.0) expr = 'yawn';
   if (t < 44.0) {
     const tilt = t > 27.3 ? -0.3 : -0.18;
-    return { x: SEAT[0], y: SEAT[1], s: S, view: 'side', pose: 'sit', hug: true, headTilt: tilt + (expr === 'sing' ? -0.04 * Math.sin(t * 5) : 0), expr, seed: 3000, sheep: sheepIn(null, { at: [46, -58], s: 0.72 }) };
+    return { x: SEAT[0], y: SEAT[1], s: GS, view: 'side', pose: 'sit', hug: true, headTilt: tilt + (expr === 'sing' ? -0.04 * Math.sin(t * 5) : 0), expr, seed: 3000, sheep: sheepIn(null, { at: [46, -58], s: 0.72 }) };
   }
-  if (t < 44.3) return { x: SEAT[0], y: SEAT[1], s: S, view: 'side', pose: 'sit', hug: true, headTilt: -0.4, r: -0.55, expr: 'sleep', seed: 3000, sheep: sheepIn(null, { at: [46, -58], s: 0.72, r: -0.55, closed: true }) };
+  if (t < 44.3) return { x: SEAT[0], y: SEAT[1], s: GS, view: 'side', pose: 'sit', hug: true, headTilt: -0.4, r: -0.55, expr: 'sleep', seed: 3000, sheep: sheepIn(null, { at: [46, -58], s: 0.72, r: -0.55, closed: true }) };
   const sl = Math.atan2(-40, 620);
-  return { x: SEAT[0] - 40, y: SEAT[1] + 6, s: S, view: 'side', pose: 'lieback', flip: true, r: sl, expr: 'sleep', seed: 3000, breathe: true, sheep: sheepIn(null, { at: [-58, -112], s: 0.74, r: sl, flip: true, closed: true }) };
+  return { x: SEAT[0] - 40, y: SEAT[1] + 6, s: GS, view: 'side', pose: 'lieback', flip: true, r: sl, expr: 'sleep', seed: 3000, breathe: true, sheep: sheepIn(null, { at: [-58, -112], s: 0.74, r: sl, flip: true, closed: true }) };
 }
 
 // 月亮的状态
@@ -148,15 +157,18 @@ function sheepPos(i, t) {
 function sheepX(t) { let best = MOON.x; for (let i = 0; i < 5; i++) { const p = sheepPos(i, t); if (p && p.x > 1900 && p.x < 3000) best = p.x; } return best; }
 
 // —— 渲染一帧 ——
-export function frame(comp, t) {
+// w/h = 实际帧（视口）尺寸：首行重排版面，之后所有绘制都读派生值。
+export function frame(comp, t, w, h) {
+  setFrame(w ?? NATIVE.W, h ?? NATIVE.H);
   if (t >= 46.0) return endFrame(comp, t, { drawPage, subTo });
   drawPage(comp, t, camT(t), { vig: 0.3 * (1 - pr(t, 45, 46)) });
 }
 export function drawPage(comp, t, cam, { subs = true, vig = 0.3 } = {}) {
-  [CAM.x, CAM.y, CAM.s] = cam;
+  // 相机 zoom 里已含紧轴缩放 S：世界内容按紧轴缩小、仍居中（sx/sy 用 W/2,H/2）⇒ 世界坐标不必再乘 FX/FY。
+  CAM.x = cam[0]; CAM.y = cam[1]; CAM.s = cam[2] * S;
   BOIL.amp = t > 44.4 ? 0.55 : 1;
   clearGroup(STAR); clearGroup(MN); clearGroup(SH); clearGroup(GL);
-  [BG.f, BG.l, WASH, FX, SUBK, SUBT].forEach(clear);
+  [BG.f, BG.l, WASH, SPK, SUBK, SUBT].forEach(clear);
   // 开场画出来的进度
   const p = { hl: pr(t, 0.3, 1.2), hf: pr(t, 3.0, 4.3), tl: pr(t, 1.7, 2.3), tf: pr(t, 4.0, 4.8), gl: pr(t, 1.8, 2.4), gf: pr(t, 3.6, 4.6), wf: pr(t, 3.6, 4.4) };
   drawWorld(BG.f, BG.l, p);
@@ -189,20 +201,20 @@ export function drawPage(comp, t, cam, { subs = true, vig = 0.3 } = {}) {
   if (t > 27.6 && t < 40) for (let j = 0; j < 11; j++) {
     const t0 = 27.7 + BEAT * j; if (t0 > 36) break; const u = (t - t0) / 3.2; if (u < 0 || u > 1) continue;
     const bx = SEAT[0] + 44 + 150 * u + 26 * Math.sin(u * 6 + j), by = SEAT[1] - 116 - 330 * u;
-    noteGlyph(FX, bx, by, j, 1 - pr(u, 0.6, 1), pr(u, 0, 0.12));
+    noteGlyph(SPK, bx, by, j, 1 - pr(u, 0.6, 1), pr(u, 0, 0.12));
   }
   // 星星闪烁
   if (t > 34.6) for (let k = 0; k < 16; k++) {
     const s = STARS[(k * 37) % STARS.length]; if (!s.big) continue;
     const ph = (t * 0.7 + hash(k) * 3) % 3; if (ph > 0.5) continue;
     const a = Math.sin(ph / 0.5 * Math.PI), r = s.r * (1.6 + 1.2 * a);
-    line(FX, [[s.x - r, s.y], [s.x + r, s.y]], { w: 3.5, col: K.white, p: a, seed: 800 + k, wob: 0.2 });
-    line(FX, [[s.x, s.y - r], [s.x, s.y + r]], { w: 3.5, col: K.white, p: a, seed: 820 + k, wob: 0.2 });
+    line(SPK, [[s.x - r, s.y], [s.x + r, s.y]], { w: 3.5, col: K.white, p: a, seed: 800 + k, wob: 0.2 });
+    line(SPK, [[s.x, s.y - r], [s.x, s.y + r]], { w: 3.5, col: K.white, p: a, seed: 820 + k, wob: 0.2 });
   }
   // 睡着的 z
-  if (t > 44.7) for (let j = 0; j < 4; j++) { const t0 = 44.7 + j * 1.1; const u = (t - t0) / 2.4; if (u < 0 || u > 1) continue; text(FX, 'z', sx(SEAT[0] + 40 + 60 * u), sy(SEAT[1] - 70 - 140 * u), { size: (40 + 30 * u) * CAM.s, font: 'Gaegu', weight: 700, p: 1 - pr(u, 0.6, 1), seed: 60 + j }); }
-  // 海报：白蜡笔写的片名（?poster=1）
-  if (POSTER) { text(FX, 'The Moon', 150, 170, { size: 120, font: 'Gaegu', weight: 700, col: K.yellow, p: 1, stroke: 3, align: 'left', seed: 5 }); text(FX, "Can't Sleep", 190, 290, { size: 120, font: 'Gaegu', weight: 700, col: K.yellow, p: 1, stroke: 3, align: 'left', seed: 6 }); text(FX, 'a crayon picture book', 200, 360, { size: 46, col: K.white, p: 1, align: 'left', seed: 7 }); }
+  if (t > 44.7) for (let j = 0; j < 4; j++) { const t0 = 44.7 + j * 1.1; const u = (t - t0) / 2.4; if (u < 0 || u > 1) continue; text(SPK, 'z', sx(SEAT[0] + 40 + 60 * u), sy(SEAT[1] - 70 - 140 * u), { size: (40 + 30 * u) * CAM.s, font: 'Gaegu', weight: 700, p: 1 - pr(u, 0.6, 1), seed: 60 + j }); }
+  // 海报：白蜡笔写的片名（?poster=1）——屏幕空间家什，走「设计帧 → 当前帧等比装入」
+  if (POSTER) { text(SPK, 'The Moon', fitX(150), fitY(170), { size: 120 * S, font: 'Gaegu', weight: 700, col: K.yellow, p: 1, stroke: 3, align: 'left', seed: 5 }); text(SPK, "Can't Sleep", fitX(190), fitY(290), { size: 120 * S, font: 'Gaegu', weight: 700, col: K.yellow, p: 1, stroke: 3, align: 'left', seed: 6 }); text(SPK, 'a crayon picture book', fitX(200), fitY(360), { size: 46 * S, col: K.white, p: 1, align: 'left', seed: 7 }); }
   // 水彩
   if (t > BANDS[0].t0) drawWash(WASH, t);
   // 字幕
@@ -216,7 +228,7 @@ export function drawPage(comp, t, cam, { subs = true, vig = 0.3 } = {}) {
   comp.group(MN, { goff: go }); comp.group(SH, { goff: go });
   if (t > BANDS[0].t0) comp.wash(WASH.c, { color: PAL.wash });
   comp.group(GL, { goff: go });       // 女孩画在水彩之后：夜里也读得清她的脸
-  comp.crayon(FX.c, { goff: go });
+  comp.crayon(SPK.c, { goff: go });
   comp.knock(SUBK.c); comp.crayon(SUBT.c);
   comp.finish({ vig });
 }
@@ -235,13 +247,14 @@ function noteGlyph(L, x, y, j, p, draw) {
   }
 }
 export function subTo(SUBK, SUBT, t) {
-  const S = SUBS.find(s => t >= s.t0 && t < s.t1); if (!S) return;
-  const rv = pr(t, S.t0, S.t0 + 0.35);
-  const g = SUBK.g; g.save(); g.font = '400 54px "Patrick Hand"'; const tw = g.measureText(S.text).width; g.restore();
-  // 给字留出的一块纸（不规则边）
-  const cx = 960, cy = 1002, hw = tw / 2 + 46, hh = 44;
+  const SB = SUBS.find(s => t >= s.t0 && t < s.t1); if (!SB) return;
+  const rv = pr(t, SB.t0, SB.t0 + 0.35);
+  const fs = 54 * S;
+  const g = SUBK.g; g.save(); g.font = `400 ${fs}px "Patrick Hand"`; const tw = g.measureText(SB.text).width; g.restore();
+  // 给字留出的一块纸（不规则边）——字幕是屏幕空间家什：位置走「设计帧 → 当前帧等比装入」，尺寸 ×S。
+  const cx = fitX(960), cy = fitY(1002), hw = tw / 2 + 46 * S, hh = 44 * S;
   g.save(); g.fillStyle = '#000'; g.beginPath();
   for (let i = 0; i <= 60; i++) { const a = i / 60 * Math.PI * 2; const px = Math.cos(a), py = Math.sin(a); const sq = Math.pow(Math.abs(px), 0.3) * Math.sign(px); const n = 1 + 0.06 * Math.sin(a * 7 + 1.3) + 0.03 * Math.sin(a * 17); const X = cx + sq * hw * n, Y = cy + py * hh * n; i ? g.lineTo(X, Y) : g.moveTo(X, Y); }
   g.closePath(); g.fill(); g.restore();
-  text(SUBT, S.text, cx, cy + 18, { size: 54, col: K.ink, reveal: rv, seed: 11 + S.t0 * 3, p: 1, stroke: 1.2 });
+  text(SUBT, SB.text, cx, cy + 18 * S, { size: fs, col: K.ink, reveal: rv, seed: 11 + SB.t0 * 3, p: 1, stroke: 1.2 * S });
 }

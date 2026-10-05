@@ -145,4 +145,4 @@ PRE-HIT GAPS (bed RMS in the 0.2 s before each big hit vs the 0.4 s before that;
 NOTES
   * Timeline has the cycling 2-beat cards at beats 308-314 = bars 77-78 (brief said 76-77); accents follow the timeline.
   * Shot 0 (t=0) cannot carry a lead-in whoosh; it gets an sfx impact + odaiko heartbeat at sample 0 instead.
-  * Render time 31 s.
+  * Render time 68 s.

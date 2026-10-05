@@ -1,9 +1,15 @@
 // From Bean to Cup — one continuous camera over one isometric board. Timeline, camera, stations, overlays, sound events.
 // Scenes only call engine.js (style) / world.js (the board) / hero.js (close-ups).
-import { Iso, PAL, tri, hex, mix, clamp, lerp, seg, ss, eo, eio, back, hash, TAU, C30, S30, pin, inset, ring, cutLine, ICON, iconGrid, haloText, person, FONT } from './engine.js';
+import { Iso, PAL, tri, hex, mix, clamp, lerp, seg, ss, eo, eio, back, hash, TAU, C30, S30, pin, inset, ring, cutLine, ICON, iconGrid, haloText, person, FONT, W as VW, H as VH, FX, FY, S, NATIVE, setFrame, designXf } from './engine.js';
 import * as W from './world.js';
 import * as H from './hero.js';
 import { TL, SUBS, KM } from './timeline.js';
+
+// FILM_META.aspects —— 这部影片**真的能正确构图**的输出比例清单（**字面量**：控制台按源码文本探测，
+// 不是求值，见 D:\lemo-tools\lib\aspects.mjs）。不写 = 只支持 16:9（= 没改造过，按 1920×1080 绝对像素
+// 构图、给别的尺寸会被裁）。这里能列 9:16，是因为 render() 从实际帧经 setFrame() 重排了整个版面。
+export const FILM_META = { id: 'bean-to-cup', title: 'From Bean to Cup', style: 'Isometric Infographic', aspects: ['16:9', '9:16'] };
+
 export const DUR = TL.END;
 const fmt = n => Math.round(n).toLocaleString('en-US');
 const lg = Math.log, ex = Math.exp;
@@ -98,22 +104,22 @@ export function camAt(t) {
 
 // ---------- background / clouds ----------
 function background(g, iso) {
-  g.fillStyle = PAL.bg; g.fillRect(0, 0, 1920, 1080);
-  const k = iso.cam.k; if (k > 60) return;
-  const step = k < 8 ? 10 : 5; g.fillStyle = 'rgba(160,130,90,.16)';
-  const cs = [iso.unP(0, 0, -11), iso.unP(1920, 1080, -11), iso.unP(1920, 0, -11), iso.unP(0, 1080, -11)];
+  g.fillStyle = PAL.bg; g.fillRect(0, 0, VW, VH);
+  const k = iso.cam.k; if (k > 60 * S) return;
+  const step = k < 8 * S ? 10 : 5; g.fillStyle = 'rgba(160,130,90,.16)';
+  const cs = [iso.unP(0, 0, -11), iso.unP(VW, VH, -11), iso.unP(VW, 0, -11), iso.unP(0, VH, -11)];
   const xs = cs.map(c => c[0]), ys = cs.map(c => c[1]);
   const mnx = Math.floor(Math.min(...xs) / step) * step, mxx = Math.max(...xs), mny = Math.floor(Math.min(...ys) / step) * step, mxy = Math.max(...ys);
   if ((mxx - mnx) / step * (mxy - mny) / step > 40000) return;
-  for (let x = mnx; x <= mxx; x += step) for (let y = mny; y <= mxy; y += step) { const [sx, sy] = iso.P(x, y, -11); if (sx < -4 || sx > 1924 || sy < -4 || sy > 1084) continue; g.fillRect(sx - 1.2, sy - 1.2, 2.4, 2.4); }
+  for (let x = mnx; x <= mxx; x += step) for (let y = mny; y <= mxy; y += step) { const [sx, sy] = iso.P(x, y, -11); if (sx < -4 * S || sx > VW + 4 * S || sy < -4 * S || sy > VH + 4 * S) continue; g.fillRect(sx - 1.2 * S, sy - 1.2 * S, 2.4 * S, 2.4 * S); }
 }
 function clouds(g, iso, t) {
-  const k = iso.cam.k; if (k > 40) return;
+  const k = iso.cam.k; if (k > 40 * S) return;
   const Cl = [[30, 110, 22, 9], [120, 60, 26, 11], [205, 150, 24, 8], [60, 200, 20, 10], [175, 235, 18, 9], [20, 20, 16, 12], [150, 120, 28, 7]];
   for (const [cx, cy, z, s] of Cl) {
-    const px = 1.25; const [sx, sy] = iso.P(cx + t * .8, cy - t * .5, z); const X = 960 + (sx - 960) * px, Y = 540 + (sy - 540) * px, R = s * k * px;
-    if (X < -R * 2 || X > 1920 + R * 2 || Y < -R * 2 || Y > 1080 + R * 2) continue;
-    g.save(); g.globalAlpha = .88 * clamp((40 - k) / 20);
+    const px = 1.25; const [sx, sy] = iso.P(cx + t * .8, cy - t * .5, z); const X = VW / 2 + (sx - VW / 2) * px, Y = VH / 2 + (sy - VH / 2) * px, R = s * k * px;
+    if (X < -R * 2 || X > VW + R * 2 || Y < -R * 2 || Y > VH + R * 2) continue;
+    g.save(); g.globalAlpha = .88 * clamp((40 * S - k) / (20 * S));
     const blob = (dx, dy, r) => { g.beginPath(); g.ellipse(X + dx * R, Y + dy * R, r * R, r * R * .58, 0, 0, TAU); g.fill(); };
     g.fillStyle = '#E3D6BD'; blob(.05, .12, .5); blob(.45, .14, .38); blob(-.38, .16, .34);
     g.fillStyle = '#FFFDF7'; blob(0, 0, .5); blob(.42, .04, .36); blob(-.4, .06, .32); blob(.12, -.16, .34);
@@ -218,15 +224,15 @@ function drawRoute(iso, u0, u1, o = {}) {
       if (!started) { g.moveTo(s0[0], s0[1]); started = true; } g.lineTo(s1[0], s1[1]);
     }
     g.lineJoin = 'round'; g.lineCap = 'round';
-    const lw = Math.min(8, Math.max(2.2, k * .2));
-    g.strokeStyle = 'rgba(251,244,230,.85)'; g.lineWidth = lw + 4; g.stroke();
+    const lw = Math.min(8 * S, Math.max(2.2 * S, k * .2));
+    g.strokeStyle = 'rgba(251,244,230,.85)'; g.lineWidth = lw + 4 * S; g.stroke();
     g.strokeStyle = PAL.ink; g.lineWidth = lw; g.setLineDash([lw * 3.2, lw * 2.4]); g.lineDashOffset = -(o.t || 0) * lw * 4; g.stroke();
     g.restore();
   }, 2);
 }
 
 // ---------- stations on the lower land ----------
-function plate(iso, x, y, w, d) { iso.flat([[x, y], [x + w, y], [x + w, y + d], [x, y + d]], .03, '#F6EEDD', { layer: 0 }); iso.add(-8.7e5, () => { const g = iso.g, pts = [[x, y], [x + w, y], [x + w, y + d], [x, y + d]].map(q => iso.P(q[0], q[1], .04)); g.save(); g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath(); g.strokeStyle = iso.col(PAL.ink, .5); g.lineWidth = 1.4; g.setLineDash([6, 5]); g.stroke(); g.restore(); }, 0); }
+function plate(iso, x, y, w, d) { iso.flat([[x, y], [x + w, y], [x + w, y + d], [x, y + d]], .03, '#F6EEDD', { layer: 0 }); iso.add(-8.7e5, () => { const g = iso.g, pts = [[x, y], [x + w, y], [x + w, y + d], [x, y + d]].map(q => iso.P(q[0], q[1], .04)); g.save(); g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath(); g.strokeStyle = iso.col(PAL.ink, .5); g.lineWidth = 1.4 * S; g.setLineDash([6 * S, 5 * S]); g.stroke(); g.restore(); }, 0); }
 function roastery(iso, t) {
   const R = W.ROASTERY, T = tri('#B3352B', .2, .24), o = roastOpen(t), bc = beanColor(t);
   plate(iso, R.x - 3, R.y - 3, R.w + 6, R.d + 8);
@@ -251,7 +257,7 @@ function roastery(iso, t) {
       // cooling tray
       const tf = seg(t, TL.COOL, TL.COOL + .7);
       I.cyl(R.x + 12.4, R.y + 8.6, 0, 2.3, 1.2, tri('#B8B2A6'), { axis: 'z', n: 28, capColor: tf > 0 ? hex(mix('#8E8A82', '#5A301C', ss(tf))) : '#8E8A82' });
-      if (tf > 0) { const a = t * 3; I.line3([[R.x + 12.4, R.y + 8.6, 1.3], [R.x + 12.4 + Math.cos(a) * 2, R.y + 8.6 + Math.sin(a) * 2, 1.3]], '#3A3432', 3, { bias: 5 }); }
+      if (tf > 0) { const a = t * 3; I.line3([[R.x + 12.4, R.y + 8.6, 1.3], [R.x + 12.4 + Math.cos(a) * 2, R.y + 8.6 + Math.sin(a) * 2, 1.3]], '#3A3432', 3 * S, { bias: 5 }); }
       // bean streams
       if (t > TL.POUR && t < TL.POUR + .7) stream(I, [dx + 2, dy, dz + r + 1.2], [dx + 2, dy, dz + .6], t, '#A9B27C');
       if (tf > 0 && tf < .9) stream(I, [dx + L + .3, dy + .6, dz - 1.2], [R.x + 12.1, R.y + 8.4, 1.3], t, '#5A301C');
@@ -260,8 +266,8 @@ function roastery(iso, t) {
     },
   });
 }
-function stream(I, a, b, t, col) { I.add(1e4, () => { const g = I.g; for (let i = 0; i < 16; i++) { const f = (i / 16 + t * 2.2) % 1, p = [lerp(a[0], b[0], f), lerp(a[1], b[1], f), lerp(a[2], b[2], f) - f * f * .4]; const s = I.L(...p); g.beginPath(); g.ellipse(s[0] + (hash(i) - .5) * 6, s[1], .1 * I.cam.k, .07 * I.cam.k, i, 0, TAU); g.fillStyle = I.col(col); g.fill(); } }, 1); }
-function pop(I, x, y, z, q) { I.add(2e4, () => { const g = I.g, s = I.L(x, y, z), k = I.cam.k; g.save(); g.strokeStyle = I.col(PAL.ink, 1 - q); g.lineWidth = 2.2; g.lineCap = 'round'; for (let i = 0; i < 6; i++) { const a = i / 6 * TAU + .3, r0 = (.25 + q * .5) * k, r1 = r0 + .3 * k; g.beginPath(); g.moveTo(s[0] + Math.cos(a) * r0, s[1] + Math.sin(a) * r0); g.lineTo(s[0] + Math.cos(a) * r1, s[1] + Math.sin(a) * r1); g.stroke(); } for (let i = 0; i < 3; i++) { const a = hash(x + i) * TAU; g.beginPath(); g.ellipse(s[0] + Math.cos(a) * q * k * 1.1, s[1] + Math.sin(a) * q * k * .8 + q * q * k, .1 * k, .07 * k, a, 0, TAU); g.fillStyle = I.col('#8A5A34', 1 - q); g.fill(); } g.restore(); }, 1); }
+function stream(I, a, b, t, col) { I.add(1e4, () => { const g = I.g; for (let i = 0; i < 16; i++) { const f = (i / 16 + t * 2.2) % 1, p = [lerp(a[0], b[0], f), lerp(a[1], b[1], f), lerp(a[2], b[2], f) - f * f * .4]; const s = I.L(...p); g.beginPath(); g.ellipse(s[0] + (hash(i) - .5) * 6 * S, s[1], .1 * I.cam.k, .07 * I.cam.k, i, 0, TAU); g.fillStyle = I.col(col); g.fill(); } }, 1); }
+function pop(I, x, y, z, q) { I.add(2e4, () => { const g = I.g, s = I.L(x, y, z), k = I.cam.k; g.save(); g.strokeStyle = I.col(PAL.ink, 1 - q); g.lineWidth = 2.2 * S; g.lineCap = 'round'; for (let i = 0; i < 6; i++) { const a = i / 6 * TAU + .3, r0 = (.25 + q * .5) * k, r1 = r0 + .3 * k; g.beginPath(); g.moveTo(s[0] + Math.cos(a) * r0, s[1] + Math.sin(a) * r0); g.lineTo(s[0] + Math.cos(a) * r1, s[1] + Math.sin(a) * r1); g.stroke(); } for (let i = 0; i < 3; i++) { const a = hash(x + i) * TAU; g.beginPath(); g.ellipse(s[0] + Math.cos(a) * q * k * 1.1, s[1] + Math.sin(a) * q * k * .8 + q * q * k, .1 * k, .07 * k, a, 0, TAU); g.fillStyle = I.col('#8A5A34', 1 - q); g.fill(); } g.restore(); }, 1); }
 function cafe(iso, t) {
   const T = tri('#F1E7D2', .15, .2), o = cafeOpen(t);
   plate(iso, C.x - 3, C.y - 3, C.w + 6, C.d + 8);
@@ -296,7 +302,7 @@ function machine(I, t) {
       const g = I.g; g.save(); g.globalAlpha = o;
       I.cylNow(x + w - .9, y + .65, z + .35, .45, 1.1, tri('#C0704A'), { axis: 'z', n: 16 });
       const glow = .5 + .5 * Math.sin(t * 9); const e = I.L(x + w - .9, y + .65, z + .5); g.beginPath(); g.ellipse(e[0], e[1], .3 * I.cam.k, .15 * I.cam.k, 0, 0, TAU); g.fillStyle = I.col('#F09A3E', .5 + .4 * glow); g.fill();
-      I.line3([[x + w - .9, y + .65, z + 1.45], [x + w - .9, y + .65, z + 1.7], [x + 1.5, y + .65, z + 1.7], [x + 1.5, y + d + .2, z + 1.2]], '#8A8580', Math.max(2, I.cam.k * .08), { now: true });
+      I.line3([[x + w - .9, y + .65, z + 1.45], [x + w - .9, y + .65, z + 1.7], [x + 1.5, y + .65, z + 1.7], [x + 1.5, y + d + .2, z + 1.2]], '#8A8580', Math.max(2 * S, I.cam.k * .08), { now: true });
       g.restore();
       I.face3([[x, y + d + .01, z], [x + w, y + d + .01, z], [x + w, y + d + .01, z + h], [x, y + d + .01, z + h]], T, { out: [0, 1, 0] });
     }
@@ -311,19 +317,19 @@ function machine(I, t) {
     const sp = I.L(CUPP.x, CUPP.y - .1, z + .95), cz = I.L(CUPP.x, CUPP.y - .1, z + .4); const g = I.g, k = I.cam.k;
     if (t > TL.SIL2 && t < TL.DROP) { const s = seg(t, TL.SIL2, TL.DROP); g.beginPath(); g.ellipse(sp[0], sp[1] + s * .05 * k, .04 * k * (.5 + s), .05 * k * (.5 + s * 1.2), 0, 0, TAU); g.fillStyle = I.col('#3A2016'); g.fill(); }
     if (t >= TL.DROP && t < TL.DROP + .12) { const s = seg(t, TL.DROP, TL.DROP + .12); g.beginPath(); g.ellipse(sp[0], lerp(sp[1], cz[1], s * s), .05 * k, .07 * k, 0, 0, TAU); g.fillStyle = I.col('#3A2016'); g.fill(); }
-    if (t >= TL.DROP + .1 && t < TL.SLIDE - .25) { g.save(); g.strokeStyle = I.col('#4A2A1A'); g.lineWidth = Math.max(1.5, .035 * k * (1 - .5 * seg(t, TL.SLIDE - .8, TL.SLIDE - .25))); g.beginPath(); g.moveTo(sp[0], sp[1]); g.lineTo(cz[0], cz[1]); g.stroke(); g.restore(); }
+    if (t >= TL.DROP + .1 && t < TL.SLIDE - .25) { g.save(); g.strokeStyle = I.col('#4A2A1A'); g.lineWidth = Math.max(1.5 * S, .035 * k * (1 - .5 * seg(t, TL.SLIDE - .8, TL.SLIDE - .25))); g.beginPath(); g.moveTo(sp[0], sp[1]); g.lineTo(cz[0], cz[1]); g.stroke(); g.restore(); }
   }, 1);
 }
 
 // ---------- the dive: bean field (screen-space pile anchored on our bean) ----------
 function beanField(g, iso, t, anchor, clip) {
-  const k = iso.cam.k, u = .045 * k; if (u < 3) return;
+  const k = iso.cam.k, u = .045 * k; if (u < 3 * S) return;
   const [ax, ay] = iso.P(anchor.x, anchor.y, anchor.z);
   g.save();
-  if (clip && k < 2600) { g.beginPath(); clip.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath(); g.clip(); }
-  const x0 = Math.floor((-ax) / u) - 2, x1 = Math.ceil((1920 - ax) / u) + 2, y0 = Math.floor((-ay) / (u * .66)) - 2, y1 = Math.ceil((1080 - ay) / (u * .66)) + 2;
-  if ((x1 - x0) * (y1 - y0) > 9000) { g.fillStyle = iso.col('#A9B27C'); g.fillRect(0, 0, 1920, 1080); g.restore(); return; }
-  g.fillStyle = iso.col('#6F7650'); g.fillRect(0, 0, 1920, 1080);
+  if (clip && k < 2600 * S) { g.beginPath(); clip.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath(); g.clip(); }
+  const x0 = Math.floor((-ax) / u) - 2, x1 = Math.ceil((VW - ax) / u) + 2, y0 = Math.floor((-ay) / (u * .66)) - 2, y1 = Math.ceil((VH - ay) / (u * .66)) + 2;
+  if ((x1 - x0) * (y1 - y0) > 9000) { g.fillStyle = iso.col('#A9B27C'); g.fillRect(0, 0, VW, VH); g.restore(); return; }
+  g.fillStyle = iso.col('#6F7650'); g.fillRect(0, 0, VW, VH);
   let mine = null;
   for (let j = y0; j <= y1; j++) for (let i = x0; i <= x1; i++) {
     const h1 = hash(i * 17.3 + j * 91.7), h2 = hash(i * 5.1 + j * 13.9 + 2), px = ax + (i + (j % 2) * .5 + (h1 - .5) * .3) * u, py = ay + (j + (h2 - .5) * .3) * u * .66;
@@ -379,32 +385,35 @@ function cherryCut(g, cx, cy, R, a) {
 }
 
 // ---------- subtitles: a map label pinned to the bottom of the frame ----------
+// 字幕是**全屏叠加**：属于当前帧，所以位置按轴（中心 VW/2、底距 64·FY），字号/内边距/圆点/线宽按 S。
 function subtitle(g, text, a, fade) {
   if (a <= 0 || fade <= 0) return;
-  g.save(); g.font = `500 42px ${FONT}`; const tw = g.measureText(text).width, pad = 28, icon = 46, w = tw + pad * 2 + icon, h = 76, x = 960 - w / 2, y = 1080 - 64 - h;
-  g.globalAlpha = ss(fade); g.translate(0, (1 - ss(fade)) * 8);
+  g.save(); g.font = `500 ${42 * S}px ${FONT}`; const tw = g.measureText(text).width, pad = 28 * S, icon = 46 * S, w = tw + pad * 2 + icon, h = 76 * S, x = VW / 2 - w / 2, y = VH - 64 * FY - h;
+  g.globalAlpha = ss(fade); g.translate(0, (1 - ss(fade)) * 8 * S);
   const bw = eo(seg(a, 0, .35));
-  g.beginPath(); g.roundRect(x, y, w, h, 10); g.fillStyle = 'rgba(251,244,230,.96)'; g.fill();
-  g.save(); g.beginPath(); g.rect(x - 4, y - 4, (w + 8) * bw, h + 8); g.clip(); g.beginPath(); g.roundRect(x, y, w, h, 10); g.strokeStyle = PAL.ink; g.lineWidth = 2; g.stroke(); g.restore();
-  const ix = x + pad + 14, iy = y + h / 2 + 2, s = 13, P = (u, v, z) => [ix + (u - v) * C30 * s, iy + ((u + v) * .5 - z) * s];
+  g.beginPath(); g.roundRect(x, y, w, h, 10 * S); g.fillStyle = 'rgba(251,244,230,.96)'; g.fill();
+  g.save(); g.beginPath(); g.rect(x - 4 * S, y - 4 * S, (w + 8 * S) * bw, h + 8 * S); g.clip(); g.beginPath(); g.roundRect(x, y, w, h, 10 * S); g.strokeStyle = PAL.ink; g.lineWidth = 2 * S; g.stroke(); g.restore();
+  const ix = x + pad + 14 * S, iy = y + h / 2 + 2 * S, s = 13 * S, P = (u, v, z) => [ix + (u - v) * C30 * s, iy + ((u + v) * .5 - z) * s];
   const f = (pts, c) => { g.beginPath(); pts.forEach((p, i) => { const q = P(...p); i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]); }); g.closePath(); g.fillStyle = c; g.fill(); };
   f([[-.5, .5, -.5], [.5, .5, -.5], [.5, .5, .5], [-.5, .5, .5]], PAL.red[1]); f([[.5, -.5, -.5], [.5, .5, -.5], [.5, .5, .5], [.5, -.5, .5]], PAL.red[2]); f([[-.5, -.5, .5], [.5, -.5, .5], [.5, .5, .5], [-.5, .5, .5]], PAL.red[0]);
-  g.save(); g.beginPath(); g.rect(x + pad + icon - 6, y, (tw + 12) * ss(seg(a, .2, .75)), h); g.clip();
-  g.fillStyle = PAL.ink; g.textBaseline = 'middle'; g.fillText(text, x + pad + icon, y + h / 2 + 2); g.restore();
+  g.save(); g.beginPath(); g.rect(x + pad + icon - 6 * S, y, (tw + 12 * S) * ss(seg(a, .2, .75)), h); g.clip();
+  g.fillStyle = PAL.ink; g.textBaseline = 'middle'; g.fillText(text, x + pad + icon, y + h / 2 + 2 * S); g.restore();
   g.restore();
 }
 
 // ---------- title: extruded isometric words on a cream plate (screen space) ----------
+// 屏幕空间的成组家具，按设计帧写出 → 用「设计帧→当前帧等比装入」实现：相机 k 乘 S（text3Now 会
+// 自己 setTransform，故不能靠 designXf 包住），中心仍落在当前帧中心。S=1 时逐字节不变。
 function acc0(g) { g.save(); g.font = '700 100px Jost'; let a = 0; for (const wd of ['FROM', 'BEAN', 'TO', 'CUP']) a += (g.measureText(wd).width + 34) * .96; g.restore(); return a - 30; }
 function titleCard(g, t) {
   const a = seg(t, TL.TITLE0 - .3, TL.TITLE0) * (1 - seg(t, TL.TITLE1, TL.TITLE1 + .35)); if (a <= 0) return;
-  const I = new Iso(g); I.cam = { x: 0, y: 0, z: 0, k: 1 };
+  const I = new Iso(g); I.cam = { x: 0, y: 0, z: 0, k: S };
   const X0 = -545, Y0 = 485;                                         // plate origin (world px): text reads along −y (up-right)
   const lift = -(1 - ss(a)) * 40;
   g.save(); g.globalAlpha = ss(a);
   I.push(X0, Y0, lift, 0);
   I.prismNow([[-40, 40], [185, 40], [185, -acc0(g) - 40], [-40, -acc0(g) - 40]], -14, 14, tri('#FBF4E6', .1, .18));
-  I.add(0, () => { const pts = [[-40, 40], [185, 40], [185, -acc0(g) - 40], [-40, -acc0(g) - 40]].map(q => I.L(q[0], q[1], .5)); g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath(); g.strokeStyle = PAL.ink; g.lineWidth = 2; g.stroke(); }, 0); I.flush();
+  I.add(0, () => { const pts = [[-40, 40], [185, 40], [185, -acc0(g) - 40], [-40, -acc0(g) - 40]].map(q => I.L(q[0], q[1], .5)); g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath(); g.strokeStyle = PAL.ink; g.lineWidth = 2 * S; g.stroke(); }, 0); I.flush();
   const words = ['FROM', 'BEAN', 'TO', 'CUP']; g.font = '700 100px Jost'; const offs = []; let acc = 0; for (const wd of words) { offs.push(acc); acc += (g.measureText(wd).width + 34) * .96; }
   words.forEach((wd, i) => { const tw = TL.TITLE_WORDS[i]; if (t < tw - .02) return; const e = back(seg(t, tw, tw + .22), 2.2); I.text3Now(wd, 95, -offs[i], 0, { size: 96, plane: 'xy', extrude: 22 * e, tri: [PAL.cream[0], PAL.red[1], PAL.red[2]], face: '#FBF4E6', weight: 700 }); });
   const sa = seg(t, 6.6, 7.0); if (sa > 0) { g.save(); g.globalAlpha *= sa; I.text3Now('the journey of one coffee bean', 150, 0, 0, { size: 34, plane: 'xy', extrude: 0, tri: [PAL.ink, PAL.ink, PAL.ink], face: PAL.ink, weight: 500 }); g.restore(); }
@@ -427,11 +436,13 @@ const CUPMASK = (() => { const rows = ['..........', '.#######..', '.########.',
 
 // ---------- the scene ----------
 export function render(g, t, Q) {
+  setFrame(g.canvas.width, g.canvas.height);   // 唯一几何推导：版面从这里按实际帧重排（1920×1080 时 FX=FY=S=1）
   const iso = new Iso(g);
   iso.cam = Q.has('k') ? { x: +Q.get('cx'), y: +Q.get('cy'), z: +(Q.get('cz') || 0), k: +Q.get('k') } : camAt(t);
+  iso.cam.k *= S;                              // 相机 zoom ×S：把设计帧的世界等比装入当前帧（S=1 时逐字节不变）
   const k = iso.cam.k, sh = shipPose(t), desat = t >= TL.SIL0 && t < TL.HORN + .15 ? ss(seg(t, TL.SIL0, TL.SIL0 + .35)) * (1 - seg(t, TL.HORN, TL.HORN + .15)) : 0;
   background(g, iso);
-  const deep = k > 2600;
+  const deep = k > 2600 * S;
   if (!deep) {
     W.drawBoard(iso); W.drawGround(iso, t);
     W.drawMountain(iso, t); W.drawTrees(iso); W.drawBeds(iso, t, { dry: t < TL.DRY0 ? 0 : seg(t, TL.DRY0, TL.DRY1), rake: t, rakeAmp: TL.RAKES.some(r => t > r - .1 && t < r + .3) ? 1 : 0 });
@@ -463,7 +474,7 @@ export function render(g, t, Q) {
     // lower land
     W.drawCity(iso, t); W.quayB(iso, t);
     const ub = seg(t, TL.UNLOAD, TL.UNLOAD + .55);
-    const cbA = clamp((80 - k) / 40);
+    const cbA = clamp((80 * S - k) / (40 * S));
     W.crane(iso, 94, 214, { flip: true, alpha: cbA, trolley: lerp(-14, -4, ss(ub)), hookZ: t > TL.UNLOAD && t < TL.TRUCK_B ? 6 + Math.sin(ub * Math.PI) * 6 : 16 });
     W.crane(iso, 118, 214, { flip: true, trolley: -8, hookZ: 16, alpha: cbA });
     const tb = t < TL.TRUCK_B ? TRUCK_B.at(0) : truckB(t);
@@ -472,7 +483,7 @@ export function render(g, t, Q) {
     const bk = BIKE.at(eio(seg(t, TL.BIKE, TL.CAFE0))); if (t > 39.8 && t < TL.CAFE0 + 1) W.drawBike(iso, bk.x, bk.y, bk.rot);
     W.people(iso, peopleNow(t).map(p => ({ ...p, o: p.o })).filter(p => (p.alpha ?? 1) > .02));
     const rl = t >= TL.FULL0 ? 0 : routeLead(t);
-    if (rl > 0 && k < 60) drawRoute(iso, 0, rl, { t, a: clamp((60 - k) / 25) });
+    if (rl > 0 && k < 60 * S) drawRoute(iso, 0, rl, { t, a: clamp((60 * S - k) / (25 * S)) });
     if (t >= TL.FULL0) drawRoute(iso, 0, seg(t, TL.FULL_STATIONS[0] - .3, TL.FULL_STATIONS[6]), { t: 0 });
     iso.desat = desat;
     iso.flush();
@@ -482,7 +493,7 @@ export function render(g, t, Q) {
   const ha = heroAlpha(t); if (ha > 0) hero(g, iso, t, ha);
   // the bean field (through the tear, then filling the frame)
   let bf = null;
-  if (tearA(t) > 0 && k > 150) { iso.desat = desat; bf = beanField(g, iso, t, V(sackFace(sh)), tearPoly(iso, sh, tearA(t))); iso.desat = 0; }
+  if (tearA(t) > 0 && k > 150 * S) { iso.desat = desat; bf = beanField(g, iso, t, V(sackFace(sh)), tearPoly(iso, sh, tearA(t))); iso.desat = 0; }
   if (!deep) clouds(g, iso, t);
   overlays(g, iso, t, sh, bf, Q);
   const sub = SUBS.find(s => t >= s.t0 && t < s.t1 + .3);
@@ -492,8 +503,8 @@ export function render(g, t, Q) {
 function hero(g, iso, t, ha) {
   const opening = t < 10, A = opening ? A0 : A1(t);
   const [sx, sy] = iso.P(A.x, A.y, A.z), k = iso.cam.k;
-  g.save(); g.globalAlpha = ha * ha; g.fillStyle = opening ? '#7AA65D' : '#C9A574'; g.fillRect(0, 0, 1920, 1080);
-  if (!opening) { g.fillStyle = '#B8935F'; g.fillRect(0, sy + .55 * k, 1920, 1080); }
+  g.save(); g.globalAlpha = ha * ha; g.fillStyle = opening ? '#7AA65D' : '#C9A574'; g.fillRect(0, 0, VW, VH);
+  if (!opening) { g.fillStyle = '#B8935F'; g.fillRect(0, sy + .55 * k, VW, VH); }
   g.globalAlpha = ha; g.translate(sx, sy); g.scale(k, k);
   if (opening) {
     // branch above, the picked cherry falls into the palm on LAND (squash + two small bounces)
@@ -510,9 +521,9 @@ function hero(g, iso, t, ha) {
     H.palm(g, { skin: '#E8B894', sleeve: '#3C7FB1', close: .5, inside: (gg) => H.cup(gg, t, { fill: 1 }) });
   }
   g.restore();
-  // the km tag: identical pixel geometry both times
-  const tagA = opening ? seg(t, TL.ZERO_LAB, TL.ZERO_LAB + .6) * clamp((k - 250) / 150) : seg(t, TL.HAND, TL.HAND + .6) * clamp((k - 250) / 150);
-  H.kmTag(g, sx + .02 * k + 40, sy - .1 * k, opening ? '0 km' : fmt(KM.total) + ' km', tagA);
+  // the km tag: identical pixel geometry both times (k 已含 S，故门槛也按 S 折算，16:9 时退化成原值)
+  const tagA = opening ? seg(t, TL.ZERO_LAB, TL.ZERO_LAB + .6) * clamp((k - 250 * S) / (150 * S)) : seg(t, TL.HAND, TL.HAND + .6) * clamp((k - 250 * S) / (150 * S));
+  H.kmTag(g, sx + .02 * k + 40 * S, sy - .1 * k, opening ? '0 km' : fmt(KM.total) + ' km', tagA);
 }
 
 function overlays(g, iso, t, sh, bf, Q) {
@@ -520,9 +531,9 @@ function overlays(g, iso, t, sh, bf, Q) {
   if (t >= TL.HARV_LAB && t < 11.4) label(iso, 'harvest', seg(t, TL.HARV_LAB, TL.HARV_LAB + .6), { fade: 1 - seg(t, 10.8, 11.3) });
   if (t >= TL.INSET0 && t < TL.INSET1 + .5) {
     const P = picker(0), [ax, ay] = iso.P(P.x - .8, P.y + .3, P.z + 1.4); const a = seg(t, TL.INSET0, TL.INSET0 + .6) * (1 - seg(t, TL.INSET1, TL.INSET1 + .4));
-    inset(iso, ax, ay, 1430, 330, 250, a, (g2, cx, cy, R) => { g2.fillStyle = '#F7EEDC'; g2.fillRect(cx - R, cy - R, 2 * R, 2 * R); const ca = seg(t, TL.CUT, TL.CUT + .7); cherryCut(g2, cx, cy - 10, R, ca); if (ca < .2) cutLine(g2, [[cx - R * .1, cy - R * .8], [cx - R * .02, cy + R * .8]], seg(t, TL.KNIFE, TL.CUT)); });
+    inset(iso, ax, ay, 1430, 330, 250, a, (g2, cx, cy, R) => { g2.fillStyle = '#F7EEDC'; g2.fillRect(cx - R, cy - R, 2 * R, 2 * R); const ca = seg(t, TL.CUT, TL.CUT + .7); cherryCut(g2, cx, cy - 10 * S, R, ca); if (ca < .2) cutLine(g2, [[cx - R * .1, cy - R * .8], [cx - R * .02, cy + R * .8]], seg(t, TL.KNIFE, TL.CUT)); });
     const la = seg(t, TL.CUT + .5, TL.CUT + 1.0) * (1 - seg(t, TL.INSET1, TL.INSET1 + .3));
-    if (la > 0) { g.save(); g.globalAlpha = la; haloText(g, '1 CHERRY', 1240, 630, { font: `600 26px ${FONT}`, track: 3.5 }); haloText(g, '=', 1412, 632, { font: `400 40px ${FONT}` }); ICON.bean(g, 1470, 620, 46, '#B9BE86', 1, -.3); ICON.bean(g, 1522, 620, 46, '#B9BE86', 1, .3); haloText(g, 'SEEDS', 1558, 630, { font: `600 26px ${FONT}`, track: 3.5 }); g.restore(); }
+    if (la > 0) { g.save(); g.globalAlpha = la; designXf(g); haloText(g, '1 CHERRY', 1240, 630, { font: `600 26px ${FONT}`, track: 3.5 }); haloText(g, '=', 1412, 632, { font: `400 40px ${FONT}` }); ICON.bean(g, 1470, 620, 46, '#B9BE86', 1, -.3); ICON.bean(g, 1522, 620, 46, '#B9BE86', 1, .3); haloText(g, 'SEEDS', 1558, 630, { font: `600 26px ${FONT}`, track: 3.5 }); g.restore(); }
   }
   // drying: 21 suns fill on sixteenths
   if (t >= TL.DRY0 && t < 15.9) label(iso, 'dry', seg(t, TL.DRY0, TL.DRY0 + .5), { fade: 1 - seg(t, 15.3, 15.8), up: 190, icons: (g2, x, y, dir) => iconGrid(g2, x, y, 21, TL.SUNS.filter(s => s <= t).length, 7, 36, (gg, px, py, s, on) => ICON.sun(gg, px, py, s, on), dir) });
@@ -536,24 +547,24 @@ function overlays(g, iso, t, sh, bf, Q) {
   // dive knife lines + tracking rings
   if (t >= TL.DIVE0 && t < TL.HULL + .1) { const nv = [-1]; const L = W.SHIP.L, pts = [[-L / 2, -W.SHIP.W / 2, W.SHIP.deck - .6], [L / 2 - 7, -W.SHIP.W / 2, W.SHIP.deck - .6]].map(q => iso.P(...W.shipToWorld(sh, ...q))); cutLine(g, pts, seg(t, TL.DIVE0, TL.HULL)); }
   if (t >= 28.5 && t < TL.BOX_CUT + .05) { const Hh = W.HOLD, pts = [[Hh.u, Hh.v - .02, Hh.z + 2.1], [Hh.u + W.SHIP.cl, Hh.v - .02, Hh.z + 2.1], [Hh.u + W.SHIP.cl, Hh.v - .02, Hh.z], [Hh.u, Hh.v - .02, Hh.z], [Hh.u, Hh.v - .02, Hh.z + 2.1]].map(q => iso.P(...W.shipToWorld(sh, ...q))); cutLine(g, pts, seg(t, 28.5, TL.BOX_CUT)); }
-  if (t >= TL.HULL && t < TL.SACK_CUT + .2) { const c = iso.P(...holdCentre(sh)); ring(g, c[0], c[1], Math.max(50, iso.cam.k * 3.6), seg(t, TL.HULL + .1, TL.HULL + .5) * (1 - seg(t, TL.BOX_CUT + .2, TL.BOX_CUT + .5)), t, 'OURS', { ang: -2.3 }); }
-  if (t >= TL.BOX_CUT + .2 && t < TL.SIL0) { const c = iso.P(...sackFace(sh)); ring(g, c[0], c[1], Math.max(50, iso.cam.k * .62), seg(t, TL.BOX_CUT + .25, TL.BOX_CUT + .5) * (1 - seg(t, TL.SACK_CUT + .2, TL.SACK_CUT + .5)), t, 'OURS', { ang: -2.3 }); }
+  if (t >= TL.HULL && t < TL.SACK_CUT + .2) { const c = iso.P(...holdCentre(sh)); ring(g, c[0], c[1], Math.max(50 * S, iso.cam.k * 3.6), seg(t, TL.HULL + .1, TL.HULL + .5) * (1 - seg(t, TL.BOX_CUT + .2, TL.BOX_CUT + .5)), t, 'OURS', { ang: -2.3 }); }
+  if (t >= TL.BOX_CUT + .2 && t < TL.SIL0) { const c = iso.P(...sackFace(sh)); ring(g, c[0], c[1], Math.max(50 * S, iso.cam.k * .62), seg(t, TL.BOX_CUT + .25, TL.BOX_CUT + .5) * (1 - seg(t, TL.SACK_CUT + .2, TL.SACK_CUT + .5)), t, 'OURS', { ang: -2.3 }); }
   if (bf && t >= TL.RING && t < TL.HORN + .1) { ring(g, bf[0], bf[1], bf[2] * .78, seg(t, TL.RING, TL.RING + .5) * (1 - seg(t, TL.HORN, TL.HORN + .1)), t, '1 of 400,000', { ang: -.75, ts: 30, lw: 3 }); }
   if (t >= TL.TRUCK_B && t < 36.4) label(iso, 'city', seg(t, TL.TRUCK_B, TL.TRUCK_B + .5), { num: fmt(KM.city * seg(t, TL.TRUCK_B, TL.ROAST0)), fade: 1 - seg(t, 35.9, 36.3) });
-  if (t >= TL.POUR && t < 40.6) { const R = W.ROASTERY; const temp = lerp(20, 220, ss(seg(t, TL.POUR, TL.CRACK0))); pin(iso, R.x + 4.5, R.y + 6.5, 6.4, { title: 'ROAST · 12 MIN', num: fmt(temp), unit: '°C', dir: -1, up: 190, len: 70, a: seg(t, TL.POUR, TL.POUR + .5), fade: 1 - seg(t, 40.0, 40.5), icons: (g2, x, y, dir) => thermo(g2, x - 64, y + 4, temp / 220) }); }
-  if (t >= TL.HOPPER && t < 44.1) pin(iso, C.x + 3.3, C.y + 3.8, 6.2, { title: '1 CUP ≈', num: '70', unit: 'beans', dir: -1, up: 120, len: 330, a: seg(t, TL.HOPPER, TL.HOPPER + .4), fade: 1 - seg(t, 43.6, 44.1), icons: (g2, x, y) => { const n = 70 * seg(t, TL.HOPPER + .1, TL.GRIND); CUPMASK.forEach(([i, j], q) => { if (q >= n) return; const pop = back(clamp(n - q), 2.2); g2.save(); g2.translate(x - 250 + i * 24, y + 10 + j * 19); g2.scale(pop, pop); ICON.bean(g2, 0, 0, 24, '#6A3B22', 1, -.4 + (q % 3) * .3); g2.restore(); }); } });
+  if (t >= TL.POUR && t < 40.6) { const R = W.ROASTERY; const temp = lerp(20, 220, ss(seg(t, TL.POUR, TL.CRACK0))); pin(iso, R.x + 4.5, R.y + 6.5, 6.4, { title: 'ROAST · 12 MIN', num: fmt(temp), unit: '°C', dir: -1, up: 190, len: 70, a: seg(t, TL.POUR, TL.POUR + .5), fade: 1 - seg(t, 40.0, 40.5), icons: (g2, x, y, dir) => thermo(g2, x - 64 * S, y + 4 * S, temp / 220) }); }
+  if (t >= TL.HOPPER && t < 44.1) pin(iso, C.x + 3.3, C.y + 3.8, 6.2, { title: '1 CUP ≈', num: '70', unit: 'beans', dir: -1, up: 120, len: 330, a: seg(t, TL.HOPPER, TL.HOPPER + .4), fade: 1 - seg(t, 43.6, 44.1), icons: (g2, x, y) => { const n = 70 * seg(t, TL.HOPPER + .1, TL.GRIND); CUPMASK.forEach(([i, j], q) => { if (q >= n) return; const pop = back(clamp(n - q), 2.2); g2.save(); g2.translate(x - 250 * S + i * 24 * S, y + 10 * S + j * 19 * S); g2.scale(pop, pop); ICON.bean(g2, 0, 0, 24 * S, '#6A3B22', 1, -.4 + (q % 3) * .3); g2.restore(); }); } });
   if (t >= TL.FULL0) fullMap(g, iso, t, Q && Q.has('nocard'));
 }
 function label2(iso, t, p, o) { pin(iso, p[0], p[1], p[2], o); }
-function thermo(g, x, y, f) { g.save(); g.fillStyle = PAL.paper; g.strokeStyle = PAL.ink; g.lineWidth = 2; g.beginPath(); g.roundRect(x - 9, y, 18, 110, 9); g.fill(); g.stroke(); g.beginPath(); g.arc(x, y + 118, 15, 0, TAU); g.fill(); g.stroke(); g.fillStyle = PAL.red[1]; g.beginPath(); g.arc(x, y + 118, 10, 0, TAU); g.fill(); const hh = 96 * clamp(f); g.fillRect(x - 4.5, y + 108 - hh, 9, hh + 4); g.restore(); }
+function thermo(g, x, y, f) { g.save(); g.fillStyle = PAL.paper; g.strokeStyle = PAL.ink; g.lineWidth = 2 * S; g.beginPath(); g.roundRect(x - 9 * S, y, 18 * S, 110 * S, 9 * S); g.fill(); g.stroke(); g.beginPath(); g.arc(x, y + 118 * S, 15 * S, 0, TAU); g.fill(); g.stroke(); g.fillStyle = PAL.red[1]; g.beginPath(); g.arc(x, y + 118 * S, 10 * S, 0, TAU); g.fill(); const hh = 96 * S * clamp(f); g.fillRect(x - 4.5 * S, y + 108 * S - hh, 9 * S, hh + 4 * S); g.restore(); }
 function tracker(g, iso, t, sh, fade) {
   const Hh = W.HOLD, c = W.SHIP, cs = [];
   for (const du of [0, c.cl]) for (const dv of [0, c.cw]) for (const dz of [0, c.ch]) cs.push(iso.P(...W.shipToWorld(sh, Hh.u + du, Hh.v + dv, Hh.z + dz)));
   const E = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
   const a = seg(t, TL.LOAD0 + .3, TL.LOAD0 + .7) * fade;
-  g.save(); g.globalAlpha = a; g.strokeStyle = PAL.ink; g.lineWidth = 2; g.setLineDash([7, 6]); g.beginPath(); for (const [i, j] of E) { g.moveTo(cs[i][0], cs[i][1]); g.lineTo(cs[j][0], cs[j][1]); } g.stroke(); g.setLineDash([]); g.restore();
+  g.save(); g.globalAlpha = a; g.strokeStyle = PAL.ink; g.lineWidth = 2 * S; g.setLineDash([7 * S, 6 * S]); g.beginPath(); for (const [i, j] of E) { g.moveTo(cs[i][0], cs[i][1]); g.lineTo(cs[j][0], cs[j][1]); } g.stroke(); g.setLineDash([]); g.restore();
   const cx = cs.reduce((q, p) => q + p[0], 0) / 8, cy = cs.reduce((q, p) => q + p[1], 0) / 8;
-  ring(g, cx, cy, Math.max(40, iso.cam.k * 4.4), a, t, 'OURS', { ang: -2.4 });
+  ring(g, cx, cy, Math.max(40 * S, iso.cam.k * 4.4), a, t, 'OURS', { ang: -2.4 });
 }
 
 // ---------- the finished infographic + end card ----------
@@ -561,7 +572,8 @@ function fullMap(g, iso, t, nocard) {
   const keys = ['harvest', 'dry', 'truck', 'sea', 'city', 'roast', 'cafe'];
   keys.forEach((key, i) => label(iso, key, seg(t, TL.FULL_STATIONS[i], TL.FULL_STATIONS[i] + .5)));
   const la = seg(t, TL.CARD, TL.CARD + .6); if (la <= 0 || nocard) return;
-  g.save(); g.globalAlpha = la; const x = 1350, y = 630, w = 530, h = 410, sl = (1 - ss(la)) * 20;
+  // 片尾卡是屏幕空间的成组家具，按设计帧写出 → 走设计帧→当前帧的等比装入（S=1 时 setTransform 恒等）
+  g.save(); g.globalAlpha = la; designXf(g); const x = 1350, y = 630, w = 530, h = 410, sl = (1 - ss(la)) * 20;
   g.translate(0, sl);
   g.beginPath(); g.roundRect(x, y, w, h, 12); g.fillStyle = 'rgba(251,244,230,.97)'; g.fill(); g.strokeStyle = PAL.ink; g.lineWidth = 2; g.stroke();
   haloText(g, 'FROM BEAN TO CUP', x + 30, y + 64, { font: `700 44px ${FONT}`, track: 2, halo: false });

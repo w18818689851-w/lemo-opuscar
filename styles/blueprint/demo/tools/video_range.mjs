@@ -3,6 +3,15 @@
 // 每个 worker 独立浏览器，JPEG 截图经管道交给 ffmpeg；最后无损拼接
 import fs from 'fs'; import path from 'path'; import { spawn, execFileSync } from 'child_process';
 import { openDemo, closeServer } from '../../../../core/render/page.mjs';
+
+// 编码器：**未设 LEMO_VENC ⇒ 走 GPU 的 h264_nvenc**（用户硬规则：渲染一律 GPU 优先）；
+// 显式 libx264 才走 CPU；其它值报错退出，绝不静默回落 CPU（把 h264_nvenc 打错会以为在用显卡、实际走 CPU）。
+const VENC = process.env.LEMO_VENC || 'h264_nvenc';
+if (VENC !== 'h264_nvenc' && VENC !== 'libx264') { console.error(`LEMO_VENC must be h264_nvenc or libx264, or unset (which means h264_nvenc, the GPU encoder), got '${VENC}'. Refusing to fall back to the CPU encoder silently.`); process.exit(1); }
+// 编码参数：nvenc 的 cq ≈ 原 libx264 的 crf + 5；显式 libx264 时保持原参数。
+const vencArgs = (crf, preset = 'medium') => VENC === 'h264_nvenc'
+  ? ['-c:v', 'h264_nvenc', '-preset', 'p5', '-rc', 'vbr', '-cq', String(crf + 5), '-b:v', '0']
+  : ['-c:v', 'libx264', '-preset', preset, '-crf', String(crf)];
 const args = process.argv.slice(2), opt = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
 const dir = args[0], FPS = +opt('--fps', 24), WK = +opt('--workers', 3), Q = opt('--q', '');
 const outDir = path.join(dir, 'out'); fs.mkdirSync(outDir, { recursive: true });
@@ -13,7 +22,7 @@ await Promise.all([...Array(WK)].map(async (_, w) => {
   const a = F0 + w * per, b = Math.min(F1, a + per); if (a >= b) return;
   const { browser, page } = await openDemo(dir, { q: Q });
   const ff = spawn('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'mjpeg', '-i', '-',
-    '-c:v', 'libx264', '-preset', 'medium', '-crf', '14', '-pix_fmt', 'yuv420p', path.join(outDir, `rseg_${w}.mp4`)]);
+    ...vencArgs(14), '-pix_fmt', 'yuv420p', path.join(outDir, `rseg_${w}.mp4`)]);
   for (let f = a; f < b; f++) {
     await page.evaluate(t => window.render(t), f / FPS);
     const buf = await page.screenshot({ type: 'jpeg', quality: 95 });

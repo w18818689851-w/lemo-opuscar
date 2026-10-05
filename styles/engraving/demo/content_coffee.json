@@ -1,0 +1,74 @@
+{
+  "plate_no": "Pl. I",
+  "series": "Trade Gallery · The Seed That Travelled",
+  "title": "The Coffee Plant",
+  "latin": "Coffea arabica",
+  "subject": "coffee",
+
+  "details": [
+    {
+      "name": "The Flower",
+      "latin": "corolla",
+      "note": "White, five petals, jasmine-scented. Open two days.",
+      "focus": "flower"
+    },
+    {
+      "name": "The Cherry",
+      "latin": "drupa",
+      "note": "Red when ripe, after six to eleven months.",
+      "focus": "cherry"
+    },
+    {
+      "name": "The Seeds",
+      "latin": "semina",
+      "note": "Two seeds, flat face to flat face. The bean is a seed.",
+      "focus": "seed"
+    },
+    {
+      "name": "The Port of Mocha",
+      "latin": "Mocha",
+      "note": "For two hundred years, the only door.",
+      "focus": "harbour"
+    }
+  ],
+
+  "colors": [
+    { "region": "sea",    "color": "#5f7f6c" },
+    { "region": "cherry", "color": "#a8423a" }
+  ],
+
+  "caption": "Trade route of the coffee seed, 1400–1900",
+  "signature": { "left": "Lemo fecit.", "right": "Opus sculpsit." },
+
+  "voice": {
+    "voice": "bm_fable",
+    "speed": 0.92,
+    "lines": [
+      { "id": "title", "text": "Plate one. Coffea arabica, the plant that travelled.",
+        "asr": "Plate 1 Coffea arabica the plant that travelled" },
+      { "id": "d1", "text": "The flower opens white, smells of jasmine, and lasts two days." },
+      { "id": "d2", "text": "The fruit ripens red, and takes six to eleven months to do it." },
+      { "id": "d3", "text": "Inside lie two seeds, flat face to flat face. The bean is a seed." },
+      { "id": "d4", "text": "Yemen drank it by the fifteenth century. One port, Mocha, was the only door." },
+      { "id": "s1", "text": "In fifteen fifty-four, two merchants opened a coffee house in Constantinople.",
+        "asr": "In 1554 two merchants opened a coffee house in Constantinople" },
+      { "id": "s2", "text": "Venice by sixteen forty-five, London by sixteen fifty-two.",
+        "asr": "Venice by 1645 London by 1652" },
+      { "id": "s3", "text": "Java, Martinique, Brazil. By seventeen twenty-seven it was everywhere.",
+        "asr": "Java Martinique Brazil by 1727 it was everywhere" },
+      { "id": "s4", "text": "Six hundred years after it left, the plant came home to Kenya." }
+    ]
+  },
+
+  "end": {
+    "film_title": "Coffea arabica",
+    "style_name": "Copperplate Engraving",
+    "credits": [
+      "Botany · Coffea arabica L.",
+      "Route · Kaffa to Mocha to the world",
+      "Voice · Kokoro TTS (Apache-2.0)"
+    ]
+  },
+
+  "nat_size_label": "Natural size"
+}

@@ -4,7 +4,12 @@ import { hero, POSE, mixPose } from './hero.js';
 import { ridgeFn, mountainLayer, reed, ripple, vn2 } from './land.js';
 import { wave } from './wave.js';
 import { T, stepTimes } from './story.js';
+import { S, OX, OY } from './comp.js';
 import { clamp, lerp, ss, eio, eo, mulberry } from '/core/lib.js';
+
+// 本文件的两镜直接按**设计帧屏幕坐标**画（不用相机矩阵）：套一层「设计帧 → 当前帧」等比装入，
+// 于是坐标与线宽/字号一起 ×S 并居中。1920×1080 时等于 setTransform(1,0,0,1,0,0) ⇒ 逐字节不变。
+const fit = A => { for (const c of [A.cw, A.cd, A.cc]) c.setTransform(S, 0, 0, S, OX, OY); };
 
 const HZ = 560, WATER_Y = 810, SC = 3.0, SPEED = 390;
 let farC = null;
@@ -30,6 +35,7 @@ export function crossPose(t) {
 }
 
 export function renderCross(A, t) {
+  fit(A);
   const L = A.ink, t12 = Math.floor(t * 12) / 12;
   const hx = heroX(t), camX = hx - 190;          // 人在画面偏右，前方（左）留空
   const sx = x => x - camX + 960;
@@ -80,6 +86,7 @@ export function renderCross(A, t) {
 
 // 第 4 镜：低角大全景，巨浪自左升起，他在右下落水滑停
 export function renderRise(A, t) {
+  fit(A);
   const L = A.ink, t12 = Math.floor(t * 12) / 12, u = t - T.shot4;
   const push = 1 + .06 * ss(u / 5.5), sh = u > 1.5 ? (u - 1.5) * .8 : 0;
   const shake = [Math.sin(t * 37) * sh, Math.cos(t * 29) * sh * .7];

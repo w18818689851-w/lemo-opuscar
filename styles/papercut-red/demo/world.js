@@ -4,9 +4,11 @@ import { put, mul, T, S, R } from './rig.js';
 import { tuanhua, tuanhuaHoles } from './tuanhua.js';
 import { housePiece, mountainPiece, snowPiece, plumTreePiece, lanternPiece, drawSnow } from './village.js';
 import { beginLight, pool, lightMasked, lightRect, applyLight, glowWindow, bloom, rays, addMasked, E, L } from './light.js';
+import { W, H, fcanvas } from './film.js';
 import { lerp, clamp, seg, ss, hash } from '/core/lib.js';
 
-export const W = 1920, H = 1080, GROUND = 905;
+export { W, H };
+export const GROUND = 905;
 export const NIGHT = { sky: 'ink', far: '#1f2a55', mid: '#29356e', house: '#35457f', tree: '#28346c', snow: '#7a88ba', lantern: PAL.red };
 export const DAY = { sky: 'rice', far: '#e0877f', mid: '#cf4f4a', house: PAL.red, tree: '#b8191b', snow: '#f4ecd8', lantern: PAL.red };
 // 8 户人家（x, 缩放, 熄灯时刻, 灯笼到达时刻）+ 女孩家
@@ -40,7 +42,7 @@ export function winI(h, t) {
   if (t < h.relit) return 0;
   const u = t - h.relit; return u < .2 ? Math.min(1.3, u / .12) : 1 + .3 * Math.exp(-(u - .2) * 5);
 }
-const [NLc, NL] = canvas(W, H), [GLc, GL] = canvas(W, H), [SIc, SI] = canvas(W, H);
+const [NLc, NL] = fcanvas(), [GLc, GL] = fcanvas(), [SIc, SI] = fcanvas();
 export { NLc };
 // 画村子。o: { pal:'night'|'day', light: bool, nian(ctx) 画年兽（返回 M）, nianLayer:'back'|'front',
 //   hero: 'girl'|'dark'|'flower'|'none', heroI, girlSil(ctx,C) 画窗里的剪影, girl(ctx) 前景女孩, pattern: {on, a}, rays, snow }

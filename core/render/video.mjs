@@ -38,15 +38,56 @@ const fail = msg => { console.error(msg); cleanup(); process.exit(1); };
 
 const release = process.env.RENDER_SLOTS ? await (await import('./slot.mjs')).acquire() : () => {};   // RENDER_SLOT_HELD=1（外层已占槽）时直接放行
 segDir = fs.mkdtempSync(path.join(outDir, `.${base}_segs-`)); fs.writeFileSync(path.join(segDir, 'pid'), String(process.pid));
-const probe = await openDemo(dir, { w: W, h: H, q: Q }); const DUR = await probe.page.evaluate(() => window.DUR); await probe.browser.close();
+// ── 出片前显存预检（不足则自动腾挪）─────────────────────────────────────────────
+// 渲染也要显存（Chromium 页面 + h264_nvenc）。本项目的纪律是「出片前先腾显存」：真实事故是
+// LM Studio 常驻模型把显存吃到 7GB ⇒ 出片链路静默挂死。腾挪能力在 lib/vram.mjs（lemo-tools 库）。
+// 阈值 LEMO_RENDER_MIN_FREE_MIB 默认 3000：实测 styles/one-line/demo @--fps 2 --workers 1
+// 渲染期间占用 982 → 峰值 2453 MiB（增量 ~1471），取 ≈2× 余量以覆盖更重的风格与默认 3 workers。
+// ★ 拿不到模块就**跳过并说一声**，绝不把「没有 lemo-tools 库」变成出片的新失败点
+//   （与 core/tts/tts_indextts.py 的显存预检同一条纪律）。
+let vramPre = null;
+try {
+  // 模块在 lemo-tools 库：Windows 侧 D:/lemo-tools，WSL 侧 /mnt/d/lemo-tools（同一份文件的挂载）。
+  vramPre = await import(process.env.LEMO_VRAM_MODULE || (process.platform === 'win32'
+    ? 'file:///D:/lemo-tools/lib/vram.mjs'
+    : '/mnt/d/lemo-tools/lib/vram.mjs'));
+} catch (e) {
+  console.error(`[vram] 渲染前显存预检已跳过 —— 加载 lib/vram.mjs 失败：${String(e?.message || e).split('\n')[0]}`);
+}
+if (vramPre) {
+  const needMiB = Number(process.env.LEMO_RENDER_MIN_FREE_MIB ?? 3000);
+  // ★ onShort:'continue' —— 渲染侧**只腾挪、不中止**，理由（别改成硬拦）：
+  //   编排器 lemo-make.mjs:2428 把「音频链（含 Index-TTS）」与「渲染」用 Promise.all **并行**跑，
+  //   TTS 占着 6.9GB 时可用显存本来就只有几百 MiB ⇒ 硬拦会把**主题通路**整个打断。
+  //   而渲染（Chromium + h264_nvenc，实测峰值增量 ~1.5GB）**不是**会静默挂死的那一步 ——
+  //   硬拦该在 dub 的 TTS 那一侧（core/tts/tts_indextts.py 会挂死一个多小时）。
+  //   所以这里：显存不足就**尽力腾挪**（真腾出会打一行日志），腾不动也照常渲。
+  const vres = await vramPre.ensureVramFree(needMiB,
+    { label: '渲染', relaxEnv: 'LEMO_RENDER_MIN_FREE_MIB', onShort: 'continue' });
+  if (!vres.ok && process.env.LEMO_VRAM_DEBUG === '1') {
+    console.error(`[vram] 渲染前可用 ${vres.freeMiB} MiB < 建议 ${vres.needMiB} MiB，未达建议值但继续渲染`);
+  }
+}
+// probe 页开 warnings：影片模块在 makeFilm 里对「未声明的画幅」发 console.warn（如 film_coffee 的构图闸门），
+// 不打开这个开关页面警告会被**丢掉** —— 那就能从命令行**悄悄**出一部构图废掉的片子。只给 probe 页开：
+// 各 worker 载的是同一部片、同一个尺寸，probe 已经报过，不必再刷 WK 遍。
+const probe = await openDemo(dir, { w: W, h: H, q: Q, warnings: true }); const DUR = await probe.page.evaluate(() => window.DUR); await probe.browser.close();
 if (!(DUR > 0)) fail(`window.DUR must be a positive number of seconds (got ${DUR})`);
 const TOTAL = Math.round(DUR * FPS), per = Math.ceil(TOTAL / WK), t0 = Date.now();
 try { await Promise.all([...Array(WK)].map(async (_, w) => {
   const a = w * per, b = Math.min(TOTAL, a + per); if (a >= b) return;
   const { browser, page } = await openDemo(dir, { w: W, h: H, q: Q });
   // cwd 设在分段目录、用相对文件名：路径里有 # ? 之类的字符时 ffmpeg 才不会把它当协议语法
+  // 编码器：**未设 LEMO_VENC ⇒ 走 GPU 的 h264_nvenc**（用户硬规则：渲染一律 GPU 优先）；
+  // 显式 libx264 才走 CPU；其它值报错退出，绝不静默回落 CPU
+  // （把 h264_nvenc 打成 h264_nven 会以为在用显卡、实际走 CPU）。
+  const VENC = process.env.LEMO_VENC || 'h264_nvenc';
+  if (VENC !== 'h264_nvenc' && VENC !== 'libx264') fail(`LEMO_VENC must be h264_nvenc or libx264, or unset (which means h264_nvenc, the GPU encoder), got '${VENC}'. Refusing to fall back to the CPU encoder silently.`);
+  const VARG = VENC === 'h264_nvenc'
+    ? ['-c:v', 'h264_nvenc', '-preset', 'p5', '-rc', 'vbr', '-cq', '19', '-b:v', '0']
+    : ['-c:v', 'libx264', '-preset', 'medium', '-crf', '14'];
   const ff = spawn('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'mjpeg', '-i', '-',
-    '-c:v', 'libx264', '-preset', 'medium', '-crf', '14', '-pix_fmt', 'yuv420p', `seg_${w}.mp4`], { cwd: segDir, stdio: ['pipe', 'inherit', 'inherit'] });
+    ...VARG, '-pix_fmt', 'yuv420p', `seg_${w}.mp4`], { cwd: segDir, stdio: ['pipe', 'inherit', 'inherit'] });
   procs.add(ff); ff.on('close', () => procs.delete(ff));
   let dead = null;   // ffmpeg 提前退出（缺编码器、磁盘满…）：它自己的报错已打到 stderr，这里只记一笔并停止喂帧
   let done; const closed = new Promise(r => { done = r; }); ff.on('close', code => done(code));

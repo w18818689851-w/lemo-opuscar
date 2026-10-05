@@ -5,6 +5,16 @@ import { PAL, riderBike, pigeon, baguette, figureSide, poseSit, L, head } from '
 import { river, RIVER, street, ST, bakeryBuilding } from './scenes.js';
 import { park, parkFore, PARK, overhead, printerTable, printerBody, paperSheet, bellECU } from './scenes2.js';
 
+// 画幅能力声明 —— 控制台按**源码文本**探测 `FILM_META.aspects`（D:\lemo-tools\lib\aspects.mjs），扫的就是
+// `demo/film*.js`（本文件正是）。多比例的实现**不在**本模块里：影片本体按**固定设计帧 1920×1080** 绘制，
+// 一字未改；装入由**页面外壳** `demo/index.html` 完成——当前帧 ≠ 1920×1080 时把整张设计帧等比装入
+// （contain）并居中，留边 = 纸白 #F6F1E6。所以下面每个比例都是真的能**正确构图**的（整幅画面都在，
+// 不裁切；代价见 SKILL.md）。
+export const FILM_META = {
+  id: 'sunday-ride', title: 'Sunday Ride', style: 'Risograph Print',
+  aspects: ['16:9', '9:16', '3:4', '4:3', '1:1'],
+};
+
 export const DUR = 40;
 export const SHOTS = [
   ['bell', 0, 2], ['street', 2, 8], ['bakery', 8, 16], ['park', 16, 19], ['pigeons', 19, 21.5],

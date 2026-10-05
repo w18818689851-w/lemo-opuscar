@@ -1,0 +1,93 @@
+{
+ "plate_no": "Pl. XI",
+ "series": "Natural History Gallery · The Coffee Garden",
+ "title": "The Coffee Bee",
+ "latin": "Apis mellifera",
+ "subject": "bee",
+ "details": [
+  {
+   "name": "The Flower It Seeks",
+   "latin": "Coffea arabica",
+   "note": "White, jasmine-scented, open two days only. In Ethiopia's highlands it has no native honeybee — yet the flower still pays in nectar.",
+   "focus": "eye"
+  },
+  {
+   "name": "The Crossing",
+   "latin": "transitus",
+   "note": "Wings carry pollen from one blossom to the next; a tree crossed this way sets fuller fruit than one left to the wind.",
+   "focus": "hamuli"
+  },
+  {
+   "name": "The Long Carry",
+   "latin": "corbicula",
+   "note": "What the basket holds here becomes a drink carried from Kaffa to Mocha, to Java, to every city on earth.",
+   "focus": "corbicula"
+  }
+ ],
+ "colors": [
+  {
+   "region": "abdomen",
+   "color": "#c07a2e"
+  },
+  {
+   "region": "thorax",
+   "color": "#8a5a33"
+  },
+  {
+   "region": "head",
+   "color": "#6b4526"
+  },
+  {
+   "region": "eyes",
+   "color": "#4a3220"
+  },
+  {
+   "region": "wings",
+   "color": "#d8cfc0"
+  },
+  {
+   "region": "legs",
+   "color": "#5e4028"
+  },
+  {
+   "region": "pollen",
+   "color": "#e8b44a"
+  }
+ ],
+ "caption": "See the roasted bean in Gallery 6",
+ "signature": {
+  "left": "Lemo del.",
+  "right": "Opus sculp."
+ },
+ "voice": {
+  "voice": "bm_fable",
+  "speed": 0.92,
+  "lines": [
+   {
+    "id": "title",
+    "text": "Plate eleven. The coffee bee, and the flower it never asked for.",
+    "asr": "Plate 11 the coffee bee and the flower it never asked for"
+   },
+   {
+    "id": "d1",
+    "text": "In the Ethiopian highlands the coffee flower opens white, and keeps its scent for two days only.",
+    "asr": "In the Ethiopian highlands the coffee flower opens white and keeps its scent for 2 days only"
+   },
+   {
+    "id": "d2",
+    "text": "The bee arrives for the nectar, and leaves carrying pollen from one tree to the next.",
+    "asr": "The bee arrives for the nectar and leaves carrying pollen from one tree to the next"
+   },
+   {
+    "id": "d3",
+    "text": "A tree crossed this way sets heavier fruit than any left to the wind alone.",
+    "asr": "A tree crossed this way sets heavier fruit than any left to the wind alone"
+   },
+   {
+    "id": "close",
+    "text": "And so a small errand in a mountain garden becomes a cup of coffee, carried to every city on earth.",
+    "asr": "And so a small errand in a mountain garden becomes a cup of coffee carried to every city on earth"
+   }
+  ]
+ }
+}

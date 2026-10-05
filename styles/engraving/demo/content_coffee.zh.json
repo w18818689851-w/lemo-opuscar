@@ -1,0 +1,114 @@
+{
+ "lang": "zh",
+ "plate_no": "图版一",
+ "series": "贸易陈列馆 · 会旅行的种子",
+ "title": "咖啡",
+ "latin": "Coffea arabica",
+ "subject": "coffee",
+ "details": [
+  {
+   "name": "花",
+   "latin": "corolla",
+   "note": "白色，五瓣，闻起来像茉莉。只开两天。",
+   "focus": "flower"
+  },
+  {
+   "name": "果",
+   "latin": "drupa",
+   "note": "成熟转红，要六到十一个月。",
+   "focus": "cherry"
+  },
+  {
+   "name": "种子",
+   "latin": "semina",
+   "note": "两粒种子，平面相抵。咖啡豆是种子。",
+   "focus": "seed"
+  },
+  {
+   "name": "摩卡港",
+   "latin": "Mocha",
+   "note": "两百年里，唯一的门。",
+   "focus": "harbour"
+  }
+ ],
+ "colors": [
+  {
+   "region": "sea",
+   "color": "#5f7f6c"
+  },
+  {
+   "region": "cherry",
+   "color": "#a8423a"
+  }
+ ],
+ "stations": {
+  "kaffa": "卡法",
+  "mocha": "摩卡",
+  "constantinople": "君士坦丁堡",
+  "venice": "威尼斯",
+  "london": "伦敦",
+  "java": "爪哇",
+  "martinique": "马提尼克",
+  "brazil": "巴西",
+  "kenya": "肯尼亚"
+ },
+ "caption": "咖啡种子的航线，1400—1900",
+ "signature": {
+  "left": "Lemo 绘",
+  "right": "Opus 镌"
+ },
+ "voice": {
+  "engine": "indextts",
+  "voice": "zh_kepu9",
+  "lang": "cmn",
+  "speed": 1.1,
+  "lines": [
+   {
+    "id": "title",
+    "text": "图版一。阿拉比卡咖啡，那株会旅行的植物。"
+   },
+   {
+    "id": "d1",
+    "text": "花开时是白的，闻起来像茉莉，只开两天。"
+   },
+   {
+    "id": "d2",
+    "text": "果实成熟转红，要花六到十一个月。"
+   },
+   {
+    "id": "d3",
+    "text": "里面是两粒种子，平面相抵。咖啡豆是一枚种子。"
+   },
+   {
+    "id": "d4",
+    "text": "十五世纪的也门已经在喝它。唯一的门，是摩卡港。"
+   },
+   {
+    "id": "s1",
+    "text": "一五五四年，君士坦丁堡有了第一家咖啡馆。"
+   },
+   {
+    "id": "s2",
+    "text": "威尼斯一六四五年，伦敦一六五二年。"
+   },
+   {
+    "id": "s3",
+    "text": "爪哇、马提尼克、巴西。一七二七年，它无处不在。"
+   },
+   {
+    "id": "s4",
+    "text": "离开六百年后，这株植物回到了肯尼亚。"
+   }
+  ]
+ },
+ "end": {
+  "film_title": "咖啡",
+  "style_name": "铜版画",
+  "credits": [
+   "植物学 · 阿拉比卡咖啡 Coffea arabica",
+   "航线 · 卡法 — 摩卡 — 世界",
+   "配音 · Kokoro 本地合成"
+  ]
+ },
+ "nat_size_label": "原大"
+}

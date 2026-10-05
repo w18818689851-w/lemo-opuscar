@@ -1,6 +1,6 @@
 // 片名 THE VELVET CIPHER：自己拼的剪纸几何字形（直线 + 圆弧，笔画不匀、基线错落），不参照任何真实片名 logo
 // CIPHER 的 I = 一块黑色"锁板"，中间剪出红色钥匙孔；钥匙放进去就是芥末黄的 I
-import { g, C, S, piece, rough, roughC, arcP } from './paper.js';
+import { g, C, ST, piece, rough, roughC, arcP } from './paper.js';
 import { keyholeP } from './chars.js';
 
 // 字形：高 100 单位，左上为原点；返回 [外轮廓, (镂空)...]

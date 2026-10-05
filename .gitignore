@@ -2,6 +2,8 @@ node_modules/
 .venv/
 __pycache__/
 .DS_Store
+# 备份文件（*.orig-<日期>-<说明>），是改前的快照，不该入库
+*.orig-*
 # 模型与大素材（运行说明里给下载地址）
 core/tts/*.onnx
 core/tts/*.bin
@@ -28,7 +30,9 @@ styles/*/demo/music.wav
 !styles/game-show/demo/voices/*.wav
 # 赛事官方图，只作参考、不分发（片中标识怎么处理开源前再定）
 styles/pictogram-motion/demo/ref/
-styles/*/demo/music/src/
+# 2026-10-06: 原来这里有一条 `styles/*/demo/music/src/`，把配乐**源文件**也挡了 ——
+# hd-2d 的 music/src/sb_precipice.mp3（4.76 MB）是 music/edit.py 的输入、无法重建，
+# 缺了它新克隆跑不了该 demo 的配乐。源文件属「输入素材」要提交，故移除该条（体积实测见文件末尾）。
 
 # ---- 2026-09-26 GitHub 发布前补充 ----
 # 内部工作文件（不公开）
@@ -91,4 +95,29 @@ styles/*/demo/PRODUCTION_LOG*
 
 # 宣传物料（发帖用海报、预告片、教程片），只留本地，不上传 GitHub
 /docs/social/
+
+
+# ---- 2026-10-06 运行期素材例外（新克隆缺这些就出片失败；每条都先量过体积再决定）----
+# 说明：下面这些 `!` 例外必须放在所有同类 ignore 规则**之后**（gitignore 最后一条匹配者胜），
+# 所以统一收在文件末尾，不要往上挪。
+#
+# 1) watercolor 的纸纹是运行期贴图：demo/main.js 里 `PAPER_IMG.src = 'paper.jpg'`，
+#    被上面的 `styles/*/demo/**/*.jpg` 误挡 ⇒ 新克隆 404。
+#    实测该条若整体放开 = 42 文件 / 24.48 MB，其中 10.86 MB 是上面 stills 那两行注释里
+#    明确说明不入库的调试帧、13.29 MB 是 paper-popup 的 Poly Haven 贴图（而同样那批贴图
+#    已经在 core/assets/polyhaven/ 入库了，属重复副本）⇒ 体积很大且多为非运行期内容，
+#    故**不整体放开**，只点名这一个文件（0.32 MB）：
+!styles/watercolor/demo/paper.jpg
+#
+# 2) brick-toy 的配乐源文件是 demo/music/edit.py 的输入（`load('Heroic_Age.mp3')` /
+#    `load('Monkeys_Spinning_Monkeys.mp3')`），无法重建，被 `styles/*/demo/music/*.mp3`
+#    与 `styles/*/demo/**/*.mp3` 挡住。实测 mp3 规则整体放开 = 9 文件 / 48.61 MB
+#    （watercolor 12.9 + paper-popup 12.9 + paper-lantern 11.5 + brick-toy 8.49 + hd-2d 4.76）
+#    ⇒ 太大，故只点名 brick-toy 这 2 个（8.49 MB）：
+!styles/brick-toy/demo/music/*.mp3
+#
+# 3) hd-2d 的配乐源文件（music/src/sb_precipice.mp3，4.76 MB，music/edit.py 的输入）
+#    同样被 `styles/*/demo/**/*.mp3` 挡着 —— 上面删掉 `styles/*/demo/music/src/` 还不够，
+#    这里点名放行 music/src/ 下的 mp3 源文件（实测 1 文件 / 4.76 MB）：
+!styles/*/demo/music/src/*.mp3
 

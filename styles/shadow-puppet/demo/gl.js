@@ -1,5 +1,11 @@
 // 皮影幕布合成（WebGL2）：画面 = 色调映射( 灯光场 × 驴皮透射率 × 布纹 ) + 前景层 + 辉光
 // 输入：tr（透射率，白 = 全透）、front（预乘 RGBA 前景：舞台木框、观众、幕后场景、字幕）、可选 lmap（灯光图，r×6 = 亮度）
+//
+// 帧尺寸不是常量：渲染器截的是浏览器**视口**（`--size/--ratio` 会改它），所以 gl 画布跟视口走、
+// `res` = 当前帧。设计帧（幕布）固定 1920×1080：本着色器把整张设计帧**等比装入**当前帧（contain，居中）——
+// tr / front 按 uvT 取样、幕布坐标按 q 换算，设计帧外的上下留边填剧场暗色（letterCol）。
+// 1920×1080 时 fit = 1、uvk = 1、uvb = 0、fitOne = 1、inFrame = 1，每个表达式都退化成它替换掉的那个数字
+// ⇒ 16:9 逐字节不变。
 const VS = `#version 300 es
 in vec2 p; out vec2 uv; void main(){ uv = p*.5+.5; gl_Position = vec4(p,0,1); }`;
 const SCREEN = `#version 300 es
@@ -7,18 +13,24 @@ precision highp float; in vec2 uv; out vec4 o;
 uniform sampler2D tr, front, lmap; uniform vec2 res; uniform vec3 cam; uniform vec4 rect;
 uniform vec4 lamps[10]; uniform float sigB, sigC, amb, expo, haze, time, useMap, cloth, fade, frontOnly, mir;
 uniform vec3 lcol, hotcol, fadeCol;
+uniform vec2 native, uvk, uvb; uniform float fitOne; uniform vec3 letterCol;
 float h2(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453); }
 float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
   return mix(mix(h2(i), h2(i+vec2(1,0)), f.x), mix(h2(i+vec2(0,1)), h2(i+vec2(1,1)), f.x), f.y); }
 float fbm(vec2 p){ float a = .5, s = 0.0; for (int i=0;i<4;i++){ s += a*vn(p); p *= 2.03; a *= .5; } return s; }
 void main(){
   vec2 px = vec2(uv.x, 1.0-uv.y) * res;                 // 视口像素（y 向下）
-  vec2 s = cam.xy + (px - res*.5) / cam.z * vec2(mir, 1.0);   // 幕布坐标（mir = -1：从幕后看）
-  vec4 F = texture(front, uv);
+  // 当前帧 uv → 设计帧(1920×1080) uv：等比装入。1920×1080 时 uvk=1、uvb=0 ⇒ uvT 逐位等于 uv。
+  vec2 uvT = uv * uvk + uvb;
+  // 设计帧像素（相对设计中心，y 向下）。1920×1080 时走原式，逐位不变。
+  vec2 q = px - res*.5;
+  if (fitOne < .5) q = vec2((uvT.x - .5) * native.x, (.5 - uvT.y) * native.y);
+  vec2 s = cam.xy + q / cam.z * vec2(mir, 1.0);   // 幕布坐标（mir = -1：从幕后看）
+  vec4 F = texture(front, uvT);
   if (frontOnly > .5) { o = vec4(mix(F.rgb, fadeCol, fade), 1); return; }
   // 热浪：向上漂的扭曲
   vec2 hz = vec2(vn(s*.018 + vec2(0.0, time*2.6)) - .5, vn(s*.021 + vec2(5.0, time*3.1)) - .5) * haze;
-  vec3 T = texture(tr, uv + hz / res * cam.z).rgb * (1.0 - fade * 0.0);
+  vec3 T = texture(tr, uvT + hz / native * cam.z).rgb * (1.0 - fade * 0.0);
   // 灯光场
   vec3 L;
   if (useMap > .5) { L = texture(lmap, uv).rgb * 6.0 * lcol; }
@@ -37,6 +49,9 @@ void main(){
   vec3 c = 1.0 - exp(-hdr);
   c *= inside;
   c = F.rgb + c * (1.0 - F.a);
+  // 设计帧外（竖幅的上下留边）填剧场暗色；1920×1080 时 inFrame = 1 ⇒ 恒等。
+  float inFrame = step(0.0, uvT.x) * step(uvT.x, 1.0) * step(0.0, uvT.y) * step(uvT.y, 1.0);
+  c = mix(letterCol, c, inFrame);
   c = mix(c, fadeCol, fade);
   o = vec4(c, 1);
 }`;
@@ -65,6 +80,13 @@ void main(){
 export function makeGL(cv) {
   const gl = cv.getContext('webgl2', { preserveDrawingBuffer: true, antialias: false });
   const W = cv.width, H = cv.height;
+  // 设计帧（幕布）固定 1920×1080；W/H 是当前帧（视口）。等比装入：fit = min(W/1920, H/1080)。
+  const NW = 1920, NH = 1080;
+  const fit = Math.min(W / NW, H / NH);
+  const fitOne = (W === NW && H === NH) ? 1 : 0;          // 1920×1080 ⇒ 走原式（逐位不变）
+  const kx = W / (fit * NW), ky = H / (fit * NH);         // 屏幕 uv → 设计帧 uv 的线性变换
+  const ubx = .5 * (1 - kx), uby = .5 * (1 - ky);
+  const LETTER = [0.07, 0.043, 0.027];                    // 设计帧外的剧场暗色（暖黑）
   const sh = (t, s) => { const x = gl.createShader(t); gl.shaderSource(x, s); gl.compileShader(x); if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(x)); return x; };
   const prog = fs => { const p = gl.createProgram(); gl.attachShader(p, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs)); gl.bindAttribLocation(p, 0, 'p'); gl.linkProgram(p); if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p)); return p; };
   const P = { screen: prog(SCREEN), down: prog(DOWN), blur: prog(BLUR), comp: prog(COMP) };
@@ -84,6 +106,8 @@ export function makeGL(cv) {
     let p = P.screen; gl.useProgram(p);
     bindT(p, 'tr', T.tr, 0); bindT(p, 'front', T.front, 1); bindT(p, 'lmap', T.lmap, 2);
     gl.uniform2f(U(p, 'res'), W, H); gl.uniform3f(U(p, 'cam'), ...(o.cam || [960, 540, 1])); gl.uniform4f(U(p, 'rect'), ...(o.rect || [0, 0, 1920, 1080]));
+    gl.uniform2f(U(p, 'native'), NW, NH); gl.uniform2f(U(p, 'uvk'), kx, ky); gl.uniform2f(U(p, 'uvb'), ubx, uby);
+    gl.uniform1f(U(p, 'fitOne'), fitOne); gl.uniform3f(U(p, 'letterCol'), ...LETTER);
     const lv = new Float32Array(40); (o.lamps || []).slice(0, 10).forEach((l, i) => lv.set([l[0], l[1], l[2], l[3] ?? 1], i * 4));
     gl.uniform4fv(U(p, 'lamps'), lv);
     const f1 = (n, v) => gl.uniform1f(U(p, n), v);

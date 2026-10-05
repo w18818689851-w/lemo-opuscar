@@ -94,4 +94,4 @@ Pitfalls tied to this demo's props:
 - The backstage mirror helper built the rotation from `C[0]` for both axes and flipped pieces upside down → `C[0]` for x terms, `C[3]` for y terms.
 - The push-in on the backstage lamp at the top edge shoved the hands out of frame → push on frame centre, fixed point moved to the flame only for the final dive.
 - Heat drone and crackle leaked into the silent choice → hard-cut at the stop.
-- Headless Chrome screenshots occasionally timed out while 14 other renders shared the GPU → retry.
+- Headless Chrome screenshots occasionally timed out while 14 other renders shared the GPU → retry. The same contention does not only slow the voice step, it can fail it outright: Index-TTS will not load without free VRAM.

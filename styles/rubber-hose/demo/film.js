@@ -3,22 +3,44 @@
 import { hash, vnoise, clamp } from '/core/lib.js';
 export const GATE = { x: 240, y: 0, w: 1440, h: 1080, r: 28 };
 
+// 帧尺寸不是常量：渲染器截的是浏览器**视口**，`--size/--ratio` 会改它。NATIVE 是场景离屏画布的设计坐标（1920×1080）。
+// 本片没有相机——整幅画面就是一个「设计帧」，可见区是居中的 4:3 片门（GATE）。所以版面的全部内容就是
+// **片门(1440×1080 @ x=240) → 当前帧的等比装入**：紧轴缩放 S、居中偏移 OX/OY；设计帧外填同色（黑）。
+// post() 首行按实际帧调 setFrame() ⇒ 版面按实际帧重排；1920×1080 时 S=1、OX=240、OY=0 ⇒ 变换恒等，逐字节不变。
+// 顶层不许算几何：W/H/S/OX/OY 只在 setFrame() 里被赋值。
+export const NATIVE = { W: 1920, H: 1080 };
+export let W = NATIVE.W, H = NATIVE.H, S = 1, OX = GATE.x, OY = 0;
+export function setFrame(w, h) {
+  W = w; H = h;
+  S = Math.min(w / GATE.w, h / GATE.h);                 // 片门等比装入当前帧（紧轴）
+  OX = (w - GATE.w * S) / 2; OY = (h - GATE.h * S) / 2;
+}
+// 片门(设计帧) → 当前帧：居中、等比。16:9 时恒等（translate(240) ∘ scale(1) ∘ translate(-240) = I）。
+function fitGate(g) { g.translate(OX, OY); g.scale(S, S); g.translate(-GATE.x, 0); }
+
+// FILM_META.aspects —— 这部影片**真的能正确构图**的输出比例清单（**字面量**：控制台按源码文本探测，
+// 不是求值，见 D:\lemo-tools\lib\aspects.mjs）。不写 = 只支持 16:9（= 没改造过、按 1920×1080 绝对像素构图）。
+export const FILM_META = { id: 'coffee-cup-chase', title: 'Coffee Cup Chase', style: '1930s Rubber Hose Cartoon', aspects: ['16:9', '9:16'] };
+
 export function makeFilm(main) {
   const g = main.getContext('2d');
-  const scene = document.createElement('canvas'); scene.width = 1920; scene.height = 1080;
+  const scene = document.createElement('canvas'); scene.width = NATIVE.W; scene.height = NATIVE.H;
   return { g, scene, sg: scene.getContext('2d') };
 }
 
 // t = 秒；o.jump = 额外跳帧量（剪接处）；o.clean = 只要片门不要瑕疵（风格帧对比用）
+// o.W / o.H = 当前帧尺寸（页面视口；缺省回退到主画布，再回退到设计帧）
 export function post(F, t, o = {}) {
+  setFrame(o.W ?? F.g.canvas.width ?? NATIVE.W, o.H ?? F.g.canvas.height ?? NATIVE.H);
   const g = F.g, f = Math.floor(t * 24 + 1e-6);
   g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
-  g.fillStyle = '#000'; g.fillRect(0, 0, 1920, 1080);
+  g.fillStyle = '#000'; g.fillRect(0, 0, W, H);   // 当前帧全黑（16:9 时 W,H = 1920,1080，恒等）
   // 片门抖动：低频漂移 + 偶发小跳
   const wx = (vnoise(t * 1.3) - .5) * 2.4 + (hash(f * 7.1) > .985 ? (hash(f) - .5) * 5 : 0);
   const wy = (vnoise(t * 1.1 + 40) - .5) * 2.6 + (hash(f * 3.3) > .985 ? (hash(f + 9) - .5) * 6 : 0) + (o.jump || 0);
   const { x, y, w, h, r } = GATE;
   g.save();
+  fitGate(g);   // 设计帧(片门) → 当前帧「等比装入」（16:9 恒等）
   g.beginPath(); g.roundRect(x + .5, y - 4, w - 1, h + 8, r); g.clip();
   g.filter = 'blur(0.55px) contrast(1.14)';
   g.drawImage(F.scene, wx, wy);

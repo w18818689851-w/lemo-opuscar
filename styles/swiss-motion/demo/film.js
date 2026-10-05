@@ -2,18 +2,29 @@
 // 唯一例外：红圆出走（线性、不吸附、离开网格）。
 import { clamp, lerp, seg, E, snap, lin, steps, track, E8, E16, BEAT, BAR } from './ease.js';
 
-export const W = 1920, H = 1080, DUR = 44;
+// 帧尺寸不是常量：渲染器截的是浏览器**视口**，`--size/--ratio` 会改它。NATIVE 是设计帧（1920×1080）。
+// layout(W,H) 从**实际拿到的帧**重新推导整个版面（规则见下）：位置按轴拉伸（×fx / ×fy）、尺寸按紧轴
+// 缩放（×S）。派生值集中在这里，绘制点只读不重算。1920×1080 时 fx = fy = S = 1，每个表达式都退化成
+// 它替换掉的那个数字 ⇒ 16:9 逐字节不变。顶层不许算几何：W/H 只在 layout() 里被赋值。
+export const NATIVE = { W: 1920, H: 1080 }, DUR = 44;
+export let W = NATIVE.W, H = NATIVE.H, fx = 1, fy = 1, S = 1;
 export const C = {
   page: '#EAE9E5', paper: '#FFFFFF', ink: '#111111', red: '#E30613',
   grid: '#CFCEC9', pgrid: '#E2E1DC', bass: '#CFCEC9', mute: '#77766F', col: '#E2E1DC', wall: '#DFDED9',
 };
-// ---------- 画面网格：12 列，边距 96，栏距 24 ----------
-const FM = 96, FG = 24, FC = 122;
-export const fx = i => FM + i * (FC + FG);
+// ---------- 画面网格：12 列，边距 96，栏距 24（随帧宽拉伸，12 列永远铺满整幅）----------
+let FM = 96, FG = 24, FC = 122;
+export const col = i => FM + i * (FC + FG);
 // ---------- 海报（局部坐标）：706×1008；7 列 × 91 = A 多利亚 7 个音；16 行 × 40 = 16 个八分音符 ----------
+// 海报是**固定尺寸的物件**（自己的坐标系），由机位摆放/缩放；它内部这套局部几何不随帧变。
 export const PW = 706, PH = 1008, PM = 35, PMX = 34.5, CW = 91, RH = 40, NC = 7;
 export const px = c => PMX + c * CW, py = r => PM + r * RH;
 const SCORE_B = py(16);
+
+// FILM_META.aspects —— 这部影片**真的能正确构图**的输出比例清单（**字面量**：控制台按源码文本探测，不是求值，
+// 见 D:\lemo-tools\lib\aspects.mjs）。不写 = 只支持 16:9（= 没改造过，按 1920×1080 绝对像素构图、给别的尺寸会被裁）。
+// 这里能列出 9:16，是因为 renderFilm 从 opts.W/opts.H 经 layout() 重排了整个版面（见 layout() 的说明）。
+export const FILM_META = { id: 'five-rules', title: 'Five Rules for a Poster', style: 'Swiss Motion Graphics', aspects: ['16:9', '9:16'] };
 
 // ---------- 关键时刻 ----------
 export const T = {
@@ -22,8 +33,8 @@ export const T = {
   sweep: 32.0, wall: 37.0, wallD: 1.0, cut: 39.0, home: 40.0,
 };
 
-let S = null, WORDS = {}, LINES = [];
-export function setScore(s) { S = s; buildUnits(); }
+let SCORE = null, WORDS = {}, LINES = [];
+export function setScore(s) { SCORE = s; buildUnits(); }
 export function setWords(w) { WORDS = w || {}; }
 // 字幕 = 版面里的一行排版。第一句做小字（导语），其余做大字（陈述）
 const LAYOUT = { l1: [7.8, 'page'], l2: [11.8, 'page'], l3: [15.8, 'page'], l4: [19.85, 'page'], l4b: [22.15, 'page', 1], l5: [99, 'page'], l5b: [27.4, 'center'], l6: [39.95, 'wall'] };
@@ -58,12 +69,12 @@ function wordTimes(L) {
 function drawLine(g, L, t, x, ySmall, yBig, bigSize = 76) {
   if (t < L.t - .1 || t > L.end + .2) return;
   const ts = wordTimes(L), sm = L.small ? L.small.split(' ') : [], bg = L.big.split(' ');
-  const q = snap(t, L.end, E8);
+  const q = snap(t, L.end, E8), sSm = 30 * S, sBg = bigSize * S;
   let i = 0, cx = x;
-  font(g, 500, 30); g.fillStyle = C.mute;
-  for (const wd of sm) { revealText(g, wd, cx, ySmall, 30, snap(t, ts[i] + E16, E16), q); cx += textW(g, wd + ' '); i++; }
-  cx = x; font(g, L.soft ? 400 : 700, bigSize); g.fillStyle = C.ink;
-  for (const wd of bg) { revealText(g, wd, cx, yBig, bigSize, snap(t, ts[i] + E16, E16), q); cx += textW(g, wd + ' '); i++; }
+  font(g, 500, sSm); g.fillStyle = C.mute;
+  for (const wd of sm) { revealText(g, wd, cx, ySmall, sSm, snap(t, ts[i] + E16, E16), q); cx += textW(g, wd + ' '); i++; }
+  cx = x; font(g, L.soft ? 400 : 700, sBg); g.fillStyle = C.ink;
+  for (const wd of bg) { revealText(g, wd, cx, yBig, sBg, snap(t, ts[i] + E16, E16), q); cx += textW(g, wd + ' '); i++; }
 }
 
 // ======================================================================
@@ -123,20 +134,20 @@ function drawPosterText(g, t) {
 let UNITS = [];
 function buildUnits() {
   const slots = [];
-  S.final.lead.forEach(([c, r, l], bi) => { for (let j = 0; j < l; j++) slots.push({ c, r: r + j, first: j === 0, last: j === l - 1, bar: bi }); });
+  SCORE.final.lead.forEach(([c, r, l], bi) => { for (let j = 0; j < l; j++) slots.push({ c, r: r + j, first: j === 0, last: j === l - 1, bar: bi }); });
   slots.sort((a, b) => a.r - b.r || a.c - b.c);
   const [fcx, fcy] = circleFinalCenter();
-  UNITS = S.stiff.lead.map(([c, r], k) => ({ s: { c, r }, f: slots[k] }));
+  UNITS = SCORE.stiff.lead.map(([c, r], k) => ({ s: { c, r }, f: slots[k] }));
   UNITS.map((u, k) => [k, Math.hypot(px(u.s.c) + CW / 2 - fcx, py(u.s.r) + RH / 2 - fcy)]).sort((a, b) => a[1] - b[1]).forEach(([k], rank) => UNITS[k].rank = rank);
 }
 function rectOf(c, r, first = true, last = true, bar = -1) {
   let x0 = px(c) + 4, x1 = px(c) + CW - 4, y0 = first ? py(r) + 3 : py(r) - 1, y1 = last ? py(r + 1) - 3 : py(r + 1) + 1;
-  const bl = S.final.bleed && S.final.bleed[bar];
+  const bl = SCORE.final.bleed && SCORE.final.bleed[bar];
   if (bl === 'top' && first) y0 = -2;
   if (bl === 'right') x1 = PW + 2;
   return [x0, y0, x1 - x0, y1 - y0];
 }
-const barOn = (bar, row) => { const b = S.final.lead[bar]; return row >= b[1] && row < b[1] + b[2]; };
+const barOn = (bar, row) => { const b = SCORE.final.lead[bar]; return row >= b[1] && row < b[1] + b[2]; };
 function drawUnits(g, t, playRow) {
   for (let k = 0; k < UNITS.length; k++) {
     const u = UNITS[k], pin = snap(t, T.run + k * E16 + E16, E16);
@@ -152,7 +163,7 @@ function drawBass(g, t) {
   const p0 = lin(t, 16.0, 17.0);
   if (p0 <= 0) return;
   [[0, 0, 8], [0, 8, 4], [0, 12, 4]].forEach(([c, r, l], i) => {
-    const [fc, fr, fl] = S.final.bass[i], q = snap(t, T.reflow + E8 + i * E8, E8);
+    const [fc, fr, fl] = SCORE.final.bass[i], q = snap(t, T.reflow + E8 + i * E8, E8);
     const cc = lerp(c, fc, q), rr = lerp(r, fr, q), ll = lerp(l, fl, q);
     const y0 = py(rr), y1 = Math.min(py(rr + ll), PM + (SCORE_B - PM) * p0);
     if (y1 > y0) { g.fillStyle = C.bass; g.fillRect(px(cc), y0, CW, y1 - y0); }
@@ -161,11 +172,11 @@ function drawBass(g, t) {
 
 // ======================================================================
 // 红圆：呆板位 = 右上角格子（2 列直径）；最终 = 左下、4 列直径、出血到左边、被标题压住
-const D0 = () => CW * S.circleDiameterCols.stiff, D1 = () => CW * S.circleDiameterCols.final;
-function circleFinalCenter() { const [c, r] = S.final.circle, d = CW * S.circleDiameterCols.final; return [px(c) + d / 2, py(r) + d / 2]; }
+const D0 = () => CW * SCORE.circleDiameterCols.stiff, D1 = () => CW * SCORE.circleDiameterCols.final;
+function circleFinalCenter() { const [c, r] = SCORE.final.circle, d = CW * SCORE.circleDiameterCols.final; return [px(c) + d / 2, py(r) + d / 2]; }
 export function flight(t) { return lin(t, T.fly0, T.pause[0]) * .4 + lin(t, T.pause[1], T.land) * .6; }
 export function circleState(t) {   // → [left, top, d]（海报局部像素）
-  const [c0, r0] = S.stiff.circle, [c1, r1] = S.final.circle, d0 = D0(), d1 = D1();
+  const [c0, r0] = SCORE.stiff.circle, [c1, r1] = SCORE.final.circle, d0 = D0(), d1 = D1();
   let x0 = px(c0) + .25 * CW * (snap(t, T.hes, E16) - snap(t, T.hes + .375, E16)), y0 = py(r0);
   y0 = lerp(-d0 - 4, y0, snap(t, T.circleIn, BEAT));     // 进场：从海报上边沿着自己的列落下
   const a = flight(t), d = lerp(d0, d1, a);
@@ -176,7 +187,7 @@ function drawCircle(g, t, pulse) {
   if (t < T.circleIn - BEAT) return;
   const [l, tp, d] = circleState(t), cx = l + d / 2, cy = tp + d / 2;
   if (t > T.fly0 && t < T.gridOff + E8) {      // 离开后留下的空格与轨迹（1.5 px 红线）
-    const [c0, r0] = S.stiff.circle, d0 = D0(), gx = px(c0) + d0 / 2, gy = py(r0) + d0 / 2;
+    const [c0, r0] = SCORE.stiff.circle, d0 = D0(), gx = px(c0) + d0 / 2, gy = py(r0) + d0 / 2;
     const k = 1 - snap(t, T.gridOff + E8, E8);
     g.strokeStyle = C.red; g.lineWidth = 1.5;
     g.beginPath(); g.arc(gx, gy, d0 / 2 * k, 0, Math.PI * 2); g.stroke();
@@ -218,7 +229,7 @@ function drawPosterGrid(g, t, G, stroke) {
 }
 function drawGridExt(g, G) {       // 网格延伸出海报、铺满画面
   if (G.ext <= 0) return;
-  const L = 2600 * G.ext;
+  const L = 2600 * G.ext * Math.max(fx, fy);   // 网格要伸出海报铺满**当前**帧（竖屏更高，需要伸得更远）
   g.strokeStyle = C.grid; g.lineWidth = 1; g.beginPath();
   for (let c = 0; c <= NC; c++) { g.moveTo(px(c) + .5, 0); g.lineTo(px(c) + .5, -L); g.moveTo(px(c) + .5, PH); g.lineTo(px(c) + .5, PH + L); }
   for (let r = 0; r <= 16; r++) { g.moveTo(0, py(r) + .5); g.lineTo(-L, py(r) + .5); g.moveTo(PW, py(r) + .5); g.lineTo(PW + L, py(r) + .5); }
@@ -226,15 +237,25 @@ function drawGridExt(g, G) {       // 网格延伸出海报、铺满画面
 }
 
 // ======================================================================
-// 机位：海报中心、缩放、旋转
-const SPREAD = [1471, 540, 1, 0];
-const CAM = track([
-  [0, SPREAD],
-  [T.pageOut, [860, 540, 1, 0], BEAT],
-  [T.rot, [960, 540, 1.34, -Math.PI / 2], T.rotD],
-  [T.wall, [960, 452, 0.42, 0], T.wallD],
-  [T.home, SPREAD, BEAT],
-]);
+// 唯一的几何推导。位置按轴拉伸（×fx / ×fy）、尺寸按紧轴缩放（×S）：
+//   · 12 列网格随帧宽铺满（FM/FG/FC × fx）；
+//   · 机位（海报中心 cx/cy、缩放 s）随帧走 —— 海报永远落在画面里，不会跑出框外；
+//   · 字号/线宽这类尺寸 × S，竖屏下字不糊也不溢出。
+// 1920×1080 时 fx = fy = S = 1 ⇒ 全部退化成设计值，16:9 与改造前逐字节一致。
+let SPREAD = null, CAM = null;
+function layout(w, h) {
+  W = w; H = h; fx = w / NATIVE.W; fy = h / NATIVE.H; S = Math.min(fx, fy);
+  FM = 96 * fx; FG = 24 * fx; FC = 122 * fx;
+  NUM_SIZE = Math.round(700 * S / NUM_ASC);
+  SPREAD = [1471 * fx, 540 * fy, 1 * S, 0];
+  CAM = track([
+    [0, SPREAD],
+    [T.pageOut, [860 * fx, 540 * fy, 1 * S, 0], BEAT],
+    [T.rot, [960 * fx, 540 * fy, 1.34 * S, -Math.PI / 2], T.rotD],
+    [T.wall, [960 * fx, 452 * fy, 0.42 * S, 0], T.wallD],
+    [T.home, SPREAD, BEAT],
+  ]);
+}
 export function posterMatrix(t) {
   const [cx, cy, s, r] = CAM(t);
   return new DOMMatrix().translate(cx, cy).rotate(r * 180 / Math.PI).scale(s).translate(-PW / 2, -PH / 2);
@@ -246,15 +267,15 @@ const RULES = [[4.0, '1', 'Grid'], [8.0, '2', 'Typeface'], [12.0, '3', 'Space'],
 let NUM_SIZE = 980, NUM_ASC = 0.72;
 export function measureNumeral(g) { font(g, 700, 100); NUM_ASC = g.measureText('4').actualBoundingBoxAscent / 100; NUM_SIZE = Math.round(700 / NUM_ASC); }
 function drawNumeral(g, t) {
-  const base = 1044, h = NUM_SIZE * NUM_ASC;
+  const base = 1044 * fy, h = NUM_SIZE * NUM_ASC;
   for (let i = 0; i < RULES.length; i++) {
     const [tr, n] = RULES[i], tn = RULES[i + 1] ? RULES[i + 1][0] : 99;
     if (t < tr || t > tn + .01) continue;
     const up = steps(t, tr, tr + BEAT, 4), down = snap(t, tn, E8 * 2);
-    g.save(); g.beginPath(); g.rect(0, base - h - 40, 1100, h + 40); g.clip();
+    g.save(); g.beginPath(); g.rect(0, base - h - 40 * S, 1100 * fx, h + 40 * S); g.clip();
     font(g, 700, NUM_SIZE); g.fillStyle = C.ink;
     const lsb = -g.measureText(n).actualBoundingBoxLeft;       // 光学左对齐
-    g.fillText(n, fx(0) - lsb, base + (1 - up) * (h + 40) + down * (h + 40));
+    g.fillText(n, col(0) - lsb, base + (1 - up) * (h + 40 * S) + down * (h + 40 * S));
     g.restore();
   }
 }
@@ -268,14 +289,14 @@ const NOTES = [
 function drawRuleNotes(g, t) {
   const ri = RULES.findLastIndex(r => t >= r[0]); if (ri < 0) return;
   const tr = RULES[ri][0], tn = RULES[ri + 1] ? RULES[ri + 1][0] : 99, q = snap(t, tn, E8);
-  font(g, 500, 19); g.fillStyle = C.ink;
-  NOTES[ri].forEach((s, i) => { if (s) revealText(g, s, fx(4), 992 + i * 26, 19, snap(t, tr + BEAT + i * E16, E16), q); });
-  g.fillRect(fx(4), 962, FC * 2 + FG, 1);
+  font(g, 500, 19 * S); g.fillStyle = C.ink;
+  NOTES[ri].forEach((s, i) => { if (s) revealText(g, s, col(4), 992 * fy + i * 26 * S, 19 * S, snap(t, tr + BEAT + i * E16, E16), q); });
+  g.fillRect(col(4), 962 * fy, FC * 2 + FG, 1 * S);
 }
 function captionRow(g, x, p, q, a, b, c) {
-  g.fillStyle = C.ink; g.fillRect(fx(0) + x, 36, (fx(5) + FC - fx(0)) * p * (1 - q), 1);
-  font(g, 500, 19);
-  revealText(g, a, fx(0) + x, 66, 19, p, q); revealText(g, b, fx(2) + x, 66, 19, p, q); revealText(g, c, fx(4) + x, 66, 19, p, q);
+  g.fillStyle = C.ink; g.fillRect(col(0) + x, 36 * fy, (col(5) + FC - col(0)) * p * (1 - q), 1 * S);
+  font(g, 500, 19 * S);
+  revealText(g, a, col(0) + x, 66 * fy, 19 * S, p, q); revealText(g, b, col(2) + x, 66 * fy, 19 * S, p, q); revealText(g, c, col(4) + x, 66 * fy, 19 * S, p, q);
 }
 function drawCaptions(g, t) {
   if (t < 2.0 || t > T.rot + .1) return;
@@ -287,26 +308,26 @@ function drawCaptions(g, t) {
 function drawBarCounter(g, t, pageX) {
   if (t < 4) return;
   const bar = Math.floor(t / BAR) + 1, beat = Math.floor((t % BAR) / BEAT) + 1;
-  font(g, 500, 18); g.fillStyle = C.mute; g.fillText('♩ = 120', fx(6) + pageX, 1016);
-  g.fillStyle = C.ink; font(g, 600, 18); g.fillText(`bar ${String(bar).padStart(2, '0')}.${beat}`, fx(6) + pageX, 1044);
+  font(g, 500, 18 * S); g.fillStyle = C.mute; g.fillText('♩ = 120', col(6) + pageX, 1016 * fy);
+  g.fillStyle = C.ink; font(g, 600, 18 * S); g.fillText(`bar ${String(bar).padStart(2, '0')}.${beat}`, col(6) + pageX, 1044 * fy);
 }
 
 // ======================================================================
 // 开场：红线 + 网格列 + 片名
 function drawOpening(g, t) {
   if (t > 8.3) return;
-  const Y = 300;
+  const Y = 300 * fy;
   for (let c = 0; c < 12; c++) {     // 网格列：从红线处向上下同时长出（十六分音符一列）；规则一结束时收起
     const p = snap(t, .5 + c * E16 + E16, E16) * (1 - snap(t, 8.0 + (11 - c) * E16 * .25, E8));
-    if (p > 0) { g.fillStyle = C.col; g.fillRect(fx(c), Y - Y * p, FC, Y * p + (H - Y) * p); }
+    if (p > 0) { g.fillStyle = C.col; g.fillRect(col(c), Y - Y * p, FC, Y * p + (H - Y) * p); }
   }
   if (t > 4.2) return;
   const pr = lin(t, 0, .5), pout = snap(t, 4.0, E8 * 2);
-  if (pr > 0 && pout < 1) { g.fillStyle = C.red; g.fillRect(W * pout, Y, W * (pr - pout), 3); }
+  if (pr > 0 && pout < 1) { g.fillStyle = C.red; g.fillRect(W * pout, Y, W * (pr - pout), 3 * S); }
   const q = snap(t, 3.875 + E8, E8);
-  font(g, 700, 120); g.fillStyle = C.ink;
-  let x = fx(0); ['Five', 'Rules'].forEach((w, i) => { revealText(g, w, x, 168, 120, snap(t, 2.0 + i * E8 + E16, E16), q); x += textW(g, w + ' '); });
-  x = fx(0); ['for', 'a', 'Poster'].forEach((w, i) => { revealText(g, w, x, 276, 120, snap(t, 2.5 + i * E8 + E16, E16), q); x += textW(g, w + ' '); });
+  font(g, 700, 120 * S); g.fillStyle = C.ink;
+  let x = col(0); ['Five', 'Rules'].forEach((w, i) => { revealText(g, w, x, 168 * fy, 120 * S, snap(t, 2.0 + i * E8 + E16, E16), q); x += textW(g, w + ' '); });
+  x = col(0); ['for', 'a', 'Poster'].forEach((w, i) => { revealText(g, w, x, 276 * fy, 120 * S, snap(t, 2.5 + i * E8 + E16, E16), q); x += textW(g, w + ' '); });
 }
 
 // ======================================================================
@@ -362,8 +383,8 @@ function drawWallLabels(g, t, M) {
   if (t < T.wall || t > T.cut + .01) return;
   VAR.forEach((v, i) => {
     const q = M.transformPoint(new DOMPoint(v.k * SLOT, PH + 60));
-    font(g, v.ours ? 700 : 500, 22); g.fillStyle = v.ours ? C.red : C.ink;
-    revealText(g, v.label, q.x, q.y + 20, 22, snap(t, T.wall + E8 + i * E16, E16), snap(t, T.cut, E8));
+    font(g, v.ours ? 700 : 500, 22 * S); g.fillStyle = v.ours ? C.red : C.ink;
+    revealText(g, v.label, q.x, q.y + 20 * S, 22 * S, snap(t, T.wall + E8 + i * E16, E16), snap(t, T.cut, E8));
   });
 }
 
@@ -375,39 +396,40 @@ function drawEndCard(g, t, opt = {}) {
   const p = snap(t, T.home + E8, E8);
   if (opt.poster) {      // 海报：片名做主标题
     captionRow(g, 0, 1, 0, 'Swiss Motion Graphics', 'A Lemo-Opuscar film', 'LemoLab \u00d7 Claude Opus 5.5');
-    font(g, 700, 120); g.fillStyle = C.ink; g.fillText('Five Rules', fx(0), 168); g.fillText('for a Poster', fx(0), 276);
-    font(g, 500, 19); ['Typeface Archivo', 'Score A dorian \u00b7 120 bpm', 'Grid 7 \u00d7 16'].forEach((s, i) => g.fillText(s, fx(4), 992 + i * 26));
-    g.fillRect(fx(4), 962, FC * 2 + FG, 1);
+    font(g, 700, 120 * S); g.fillStyle = C.ink; g.fillText('Five Rules', col(0), 168 * fy); g.fillText('for a Poster', col(0), 276 * fy);
+    font(g, 500, 19 * S); ['Typeface Archivo', 'Score A dorian \u00b7 120 bpm', 'Grid 7 \u00d7 16'].forEach((s, i) => g.fillText(s, col(4), 992 * fy + i * 26 * S));
+    g.fillRect(col(4), 962 * fy, FC * 2 + FG, 1 * S);
     return;
   }
   captionRow(g, 0, p, 0, 'Five Rules for a Poster', 'A Lemo-Opuscar film', '2026');
-  font(g, 700, 120); g.fillStyle = C.ink;
-  let x = fx(0); ['Swiss', 'Motion'].forEach((w, i) => { revealText(g, w, x, 168, 120, snap(t, T.home + E8 + i * E8, E16)); x += textW(g, w + ' '); });
-  x = fx(0); revealText(g, 'Graphics', x, 276, 120, snap(t, T.home + E8 + 2 * E8, E16));
-  font(g, 600, 36); revealText(g, 'LemoLab × Claude Opus 5.5', fx(0), 372, 36, snap(t, T.home + BEAT * 2, E16));
-  font(g, 500, 19); g.fillStyle = C.ink;
-  ['Typeface Archivo', 'Score A dorian · 120 bpm', 'Voice Kokoro af_sarah'].forEach((s, i) => revealText(g, s, fx(4), 992 + i * 26, 19, snap(t, T.home + BEAT * 3 + i * E16, E16)));
-  g.fillRect(fx(4), 962, (FC * 2 + FG) * snap(t, T.home + BEAT * 3, E8), 1);
+  font(g, 700, 120 * S); g.fillStyle = C.ink;
+  let x = col(0); ['Swiss', 'Motion'].forEach((w, i) => { revealText(g, w, x, 168 * fy, 120 * S, snap(t, T.home + E8 + i * E8, E16)); x += textW(g, w + ' '); });
+  x = col(0); revealText(g, 'Graphics', x, 276 * fy, 120 * S, snap(t, T.home + E8 + 2 * E8, E16));
+  font(g, 600, 36 * S); revealText(g, 'LemoLab × Claude Opus 5.5', col(0), 372 * fy, 36 * S, snap(t, T.home + BEAT * 2, E16));
+  font(g, 500, 19 * S); g.fillStyle = C.ink;
+  ['Typeface Archivo', 'Score A dorian · 120 bpm', 'Voice Kokoro af_sarah'].forEach((s, i) => revealText(g, s, col(4), 992 * fy + i * 26 * S, 19 * S, snap(t, T.home + BEAT * 3 + i * E16, E16)));
+  g.fillRect(col(4), 962 * fy, (FC * 2 + FG) * snap(t, T.home + BEAT * 3, E8), 1 * S);
 }
 
 // ======================================================================
 // 主渲染
 export function renderFilm(g, t, opt = {}) {
+  layout(opt.W ?? NATIVE.W, opt.H ?? NATIVE.H);      // 唯一的几何推导：版面从这里按实际帧重排
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.fillStyle = C.page; g.fillRect(0, 0, W, H);
   g.textBaseline = 'alphabetic';
   drawOpening(g, t);
 
-  const pageX = -1200 * snap(t, T.pageOut, BEAT);
-  if (pageX > -1190) {
+  const pageX = -1200 * fx * snap(t, T.pageOut, BEAT);
+  if (pageX > -1190 * fx) {
     g.save(); g.translate(pageX, 0);
     drawNumeral(g, t); drawRuleNotes(g, t);
-    for (const L of LINES) if (L.pos === 'page') drawLine(g, L, t, fx(0), 168, 252);
+    for (const L of LINES) if (L.pos === 'page') drawLine(g, L, t, col(0), 168 * fy, 252 * fy);
     g.restore();
     drawBarCounter(g, t, pageX);
   }
   drawCaptions(g, t);
-  if (t >= T.home - BEAT) { g.fillStyle = C.red; g.fillRect(0, lerp(452, 300, snap(t, T.home, BEAT)), W, 3); }   // 红线落到片名线（在海报后面）
+  if (t >= T.home - BEAT) { g.fillStyle = C.red; g.fillRect(0, lerp(452, 300, snap(t, T.home, BEAT)) * fy, W, 3 * S); }   // 红线落到片名线（在海报后面）
 
   if (t >= 3.5 - E8) {
     const M = posterMatrix(t);
@@ -431,7 +453,7 @@ export function renderFilm(g, t, opt = {}) {
         g.save(); g.translate(0, PH / 2); g.scale(1, k); g.translate(0, -PH / 2); drawVariant(g, v); g.restore();
       }
       g.setTransform(1, 0, 0, 1, 0, 0);
-      g.fillStyle = C.red; if (t > T.cut && t < T.home - BEAT) g.fillRect(0, 452, cutX, 3);
+      g.fillStyle = C.red; if (t > T.cut && t < T.home - BEAT) g.fillRect(0, 452 * fy, cutX, 3 * S);
       g.setTransform(M);
     }
     const G = gridState(t);
@@ -443,7 +465,7 @@ export function renderFilm(g, t, opt = {}) {
     drawBass(g, t);
     const playRow = (t >= T.sweep && t < T.sweep + 4) ? (t - T.sweep) / E8 : null;
     drawUnits(g, t, playRow);
-    const cr = S.final.circle[1];
+    const cr = SCORE.final.circle[1];
     drawCircle(g, t, playRow != null ? seg(playRow, cr, cr + 4) : 0);
     drawPosterText(g, t);
     g.restore();
@@ -460,8 +482,8 @@ export function renderFilm(g, t, opt = {}) {
   drawHUD(g, t);
   drawEndCard(g, t, opt);
   if (!opt.nosub) for (const L of LINES) {
-    if (L.pos === 'center') drawLine(g, L, t, fx(0), 780, 848);
-    if (L.pos === 'wall') drawLine(g, L, t, fx(0), 928, 1004);
+    if (L.pos === 'center') drawLine(g, L, t, col(0), 780, 848);
+    if (L.pos === 'wall') drawLine(g, L, t, col(0), 928, 1004);
   }
 }
 
@@ -469,17 +491,17 @@ export function renderFilm(g, t, opt = {}) {
 function drawScoreLabels(g, t, M) {
   const q = snap(t, 36.0 + E8, E8);
   if (t < T.labels || q >= 1) return;
-  const used = new Set(S.final.lead.map(n => n[0]));
-  font(g, 700, 26);
+  const used = new Set(SCORE.final.lead.map(n => n[0]));
+  font(g, 700, 26 * S);
   for (let c = 0; c < NC; c++) {
     const pt = M.transformPoint(new DOMPoint(px(c) + CW / 2, -22));
     g.fillStyle = used.has(c) ? C.ink : C.mute;
-    revealText(g, S.cols[c], pt.x - textW(g, S.cols[c]) - 6, pt.y + 9, 26, snap(t, T.labels + E16 + c * E16 * .5, E16), q);
+    revealText(g, SCORE.cols[c], pt.x - textW(g, SCORE.cols[c]) - 6 * S, pt.y + 9 * S, 26 * S, snap(t, T.labels + E16 + c * E16 * .5, E16), q);
   }
-  font(g, 600, 22);
+  font(g, 600, 22 * S);
   [0, 8].forEach((r, i) => {
     const pt = M.transformPoint(new DOMPoint(PW + 16, py(r)));
-    g.fillStyle = C.ink; revealText(g, `bar ${i + 1}`, pt.x, pt.y - 10, 22, snap(t, T.labels + BEAT + i * E8, E16), q);
+    g.fillStyle = C.ink; revealText(g, `bar ${i + 1}`, pt.x, pt.y - 10 * S, 22 * S, snap(t, T.labels + BEAT + i * E8, E16), q);
   });
 }
 // 出走时的坐标读数（贴近海报右边）
@@ -487,14 +509,14 @@ function drawHUD(g, t) {
   const p = snap(t, T.fly0, E8) * (1 - snap(t, T.gridOff + E8, E8));
   if (p <= 0) return;
   const [l, tp] = circleState(t), c = (l - PMX) / CW, r = (tp - PM) / RH;
-  const on = t < T.fly0 + .01, x = 1290;
-  font(g, 500, 26); g.fillStyle = C.mute;
-  revealText(g, 'col', x, 500, 26, p); revealText(g, 'row', x, 540, 26, p);
-  font(g, 700, 26); g.fillStyle = C.ink;
-  revealText(g, (c < 0 ? '−' : '') + Math.abs(c).toFixed(2), x + 80, 500, 26, p); revealText(g, r.toFixed(2), x + 80, 540, 26, p);
-  g.fillStyle = on ? C.ink : C.red; font(g, 700, 26);
-  revealText(g, on ? 'on grid' : 'off grid', x, 596, 26, p);
-  g.fillStyle = C.ink; g.fillRect(x, 460, 240 * p, 1);
+  const on = t < T.fly0 + .01, x = 1290 * fx;
+  font(g, 500, 26 * S); g.fillStyle = C.mute;
+  revealText(g, 'col', x, 500 * fy, 26 * S, p); revealText(g, 'row', x, 540 * fy, 26 * S, p);
+  font(g, 700, 26 * S); g.fillStyle = C.ink;
+  revealText(g, (c < 0 ? '−' : '') + Math.abs(c).toFixed(2), x + 80 * fx, 500 * fy, 26 * S, p); revealText(g, r.toFixed(2), x + 80 * fx, 540 * fy, 26 * S, p);
+  g.fillStyle = on ? C.ink : C.red; font(g, 700, 26 * S);
+  revealText(g, on ? 'on grid' : 'off grid', x, 596 * fy, 26 * S, p);
+  g.fillStyle = C.ink; g.fillRect(x, 460 * fy, 240 * fx * p, 1 * S);
 }
 
 // ======================================================================

@@ -150,7 +150,7 @@ $PY $D/music/edit.py                  # → music/score.wav (jump-cut search: mu
 # 5. sound events + mix
 node $D/render.mjs events             # → events.json (250 events)
 $PY $D/mix.py                         # → mix.wav (argument = other output path)
-# 6. video: 7980 frames, N workers (8 used for the demo ≈ 2.5 min; use 2 when other jobs share the GPU)
+# 6. video: 7980 frames, N workers (8 used for the demo ≈ 2.5 min; use 2 when other jobs share the GPU — contention does not only slow the voice step, it can fail it outright: Index-TTS will not load without free VRAM)
 node $D/render.mjs video 8            # → out/seg_0..7.mp4 + out/list.txt
 # 7. mux (+ film grain noise=c0s=2, loudnorm −14 LUFS) and subtitles
 zsh $D/mux.sh                         # → styles/paper-popup/paper-popup.mp4 (OUT=... to write elsewhere)

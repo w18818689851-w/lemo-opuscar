@@ -1,6 +1,19 @@
 // 木版画引擎：和纸、色版（带错位 / 胡麻摺 / 木纹）、ぼかし、刻刀墨线、吃墨显现、题签与朱印
 import { clamp, lerp, mulberry, hash, vnoise, ss, TAU } from '/core/lib.js';
 export const W = 1920, H = 1080;
+// 设计帧（NATIVE）= 上面这个 W×H；当前帧（FW×FH）由页面按**视口**设置（渲染器截的是浏览器视口）。
+// 手卷世界（纸/色版/题签位置）仍按设计坐标画，只有「屏幕空间」的家什（字幕题签、片名、片尾卡、白浪）
+// 属于当前帧：位置按轴拉伸（×FX/×FY）、尺寸/字号/线宽按紧轴缩放（×S）。1920×1080 时 FX=FY=S=1 ⇒ 逐字节不变。
+export const NATIVE = { W: 1920, H: 1080 };
+export let FW = NATIVE.W, FH = NATIVE.H, FX = 1, FY = 1, S = 1;
+export function setFrame(w, h) {
+  FW = w; FH = h; FX = w / NATIVE.W; FY = h / NATIVE.H; S = Math.min(FX, FY);
+  // 印记用的临时画布要能装下**较大**的那一帧：设计坐标的家什（版框/题签）与当前帧坐标的家什（字幕）共用它们。
+  const mw = Math.max(W, w), mh = Math.max(H, h);
+  if (TX.tmp && (TX.tmp.width !== mw || TX.tmp.height !== mh)) { TX.tmp.width = mw; TX.tmp.height = mh; }
+  if (TX.tmp2 && (TX.tmp2.width !== mw || TX.tmp2.height !== mh)) { TX.tmp2.width = mw; TX.tmp2.height = mh; }
+}
+
 // 画框（墨线边框）
 export const FR = { x0: 44, y0: 38, x1: 1876, y1: 1042 };
 export const PAL = {
@@ -100,7 +113,7 @@ export function buildTextures() {
       x.putImageData(id, 0, 0); TX.reveal.push(c);
     }
   }
-  TX.tmp = mk(); TX.tmp2 = mk();
+  TX.tmp = mk(Math.max(W, FW), Math.max(H, FH)); TX.tmp2 = mk(Math.max(W, FW), Math.max(H, FH));
 }
 function fibers(x, n, col, a, lw, seed, len = 60) {
   const R = mulberry(seed); x.strokeStyle = col; x.lineCap = 'round';
@@ -204,21 +217,24 @@ export function kasumi(x, cx, cy, w, h, col, a = 1, vfade = 0) {
   x.lineTo(cx - w / 2 + h / 2, cy + h / 2); x.arc(cx - w / 2 + h / 2, cy, h / 2, Math.PI / 2, Math.PI * 1.5); x.fill(); x.restore();
 }
 // 画一层到目标上：reveal ∈[0,1]（吃墨显现 + 错位对准）
-export function stampLayer(dst, src, reveal = 1, reg = [0, 0], shift = [5, -4]) {
+// mw/mh = 吃墨遮罩铺多大：世界坐标的家什（版框/色版/题签）用设计帧 W×H；
+// 屏幕坐标的家什（字幕）按当前帧 FW×FH 传进来，否则竖幅下遮罩盖不到画面底部的字幕。
+// 1920×1080 时 mw=W、mh=H ⇒ 与改造前逐位相同。
+export function stampLayer(dst, src, reveal = 1, reg = [0, 0], shift = [5, -4], mw = W, mh = H) {
   if (reveal <= 0) return;
   if (reveal >= 1) { dst.drawImage(src, reg[0], reg[1]); return; }
   const k = Math.min(12, Math.floor(reveal * 12.999)), t = TX.tmp, x = t.getContext('2d');
   const e = 1 - ss(clamp(reveal * 1.6)), ox = reg[0] + shift[0] * e, oy = reg[1] + shift[1] * e;
   x.setTransform(1, 0, 0, 1, 0, 0); x.globalCompositeOperation = 'copy'; x.drawImage(src, ox, oy);
-  x.globalCompositeOperation = 'destination-in'; x.drawImage(TX.reveal[k], 0, 0, W, H); x.globalCompositeOperation = 'source-over';
+  x.globalCompositeOperation = 'destination-in'; x.drawImage(TX.reveal[k], 0, 0, mw, mh); x.globalCompositeOperation = 'source-over';
   dst.drawImage(t, 0, 0);
 }
 // 把一段即时绘制的内容（函数）按 reveal 印上去
-export function stampFn(dst, fn, reveal = 1, shift = [5, -4]) {
+export function stampFn(dst, fn, reveal = 1, shift = [5, -4], mw = W, mh = H) {
   if (reveal <= 0) return;
   if (reveal >= 1) { fn(dst); return; }
-  const t = TX.tmp2, x = t.getContext('2d'); x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, W, H);
-  fn(x); stampLayer(dst, t, reveal, [0, 0], shift);
+  const t = TX.tmp2, x = t.getContext('2d'); x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, mw, mh);
+  fn(x); stampLayer(dst, t, reveal, [0, 0], shift, mw, mh);
 }
 
 // —— 朱印 ——

@@ -11,7 +11,14 @@ import { buildTitle, buildEnd } from './scenes/cards.js';
 import { walker, umbrellaSide, umbrellaTop, rain, splashes, ribbon, pat, UMB } from './scenes/figures.js';
 import { clamp, lerp, ss, seg, eo, eio, back, hash } from './scenes/common.js';
 
-const NEVER = 1e6, W = 1920, H = 1080;
+const NEVER = 1e6;
+// 帧尺寸不是常量：渲染器截的是浏览器**视口**，`--size/--ratio` 会改它。NATIVE 是设计帧（1920×1080）。
+// frame() 首行按实际帧调 setFrame()：相机 zoom ×S（世界等比装入、居中），屏幕空间效果（雨、暗角、字幕板）按当前帧铺满。
+// 1920×1080 时 FX = FY = S = 1，每个表达式退化成它替换掉的那个数字 ⇒ 16:9 逐字节不变。
+export const NATIVE = { W: 1920, H: 1080 };
+export let W = NATIVE.W, H = NATIVE.H, FX = 1, FY = 1, S = 1;
+export function setFrame(w, h) { W = w; H = h; FX = w / NATIVE.W; FY = h / NATIVE.H; S = Math.min(FX, FY); }
+export const FILM_META = { id: 'colour-of-rain', title: 'The Colour of Rain', style: 'Impasto', aspects: ['16:9', '9:16'] };
 // affine [a,b,c,d,e,f]: x' = a x + c y + e, y' = b x + d y + f
 const mul = (A, B) => [A[0] * B[0] + A[2] * B[1], A[1] * B[0] + A[3] * B[1], A[0] * B[2] + A[2] * B[3], A[1] * B[2] + A[3] * B[3], A[0] * B[4] + A[2] * B[5] + A[4], A[1] * B[4] + A[3] * B[5] + A[5]];
 const TR = (x, y) => [1, 0, 0, 1, x, y], SC = s => [s, 0, 0, s, 0, 0], RO = a => [Math.cos(a), Math.sin(a), -Math.sin(a), Math.cos(a), 0, 0];
@@ -20,9 +27,11 @@ const key = (t, ks) => { if (t <= ks[0][0]) return ks[0][1]; for (let i = 0; i <
 const lin1 = x => x;
 
 let E, P = {}, dyn, credits;
-export async function setup(canvas) {
+export async function setup(canvas, o = {}) {
+  const vw = o.W ?? NATIVE.W, vh = o.H ?? NATIVE.H;
+  setFrame(vw, vh);
   await document.fonts.load('italic 600 100px "Cormorant Garamond"'); await document.fonts.load('500 40px "Cormorant SC"');
-  E = new Impasto(canvas); dyn = new Strokes(8192);
+  E = new Impasto(canvas, { W: vw, H: vh }); dyn = new Strokes(8192);
   const up = (built, w, h, ox = 0, oy = 0) => ({ b: E.batch(built.strokes.data()), tex: E.texture(built.ref.ctx.canvas), w, h, ox, oy });
   P.ecu = up(buildEcu(), EW, EH);
   P.wide = up(buildWide(), WW, WH);
@@ -33,8 +42,8 @@ export async function setup(canvas) {
   P.top = up(buildTop(), TW, TH);
   P.title = up(buildTitle(), 1500, 330); P.end = up(buildEnd(), 1920, 1080);
   credits = document.createElement('div');
-  credits.style.cssText = 'position:fixed;left:0;right:0;top:640px;text-align:center;font-family:"Cormorant SC",serif;color:#efe2c4;letter-spacing:.08em;opacity:0;line-height:1.5;text-shadow:0 2px 6px rgba(0,0,0,.5)';
-  credits.innerHTML = '<div style="font-size:38px">an impasto palette-knife study</div><div style="font-size:30px;margin-top:22px;color:#f6d690">Lemo-Opuscar &nbsp;·&nbsp; LemoLab × Claude Opus 5.5</div><div style="font-size:21px;margin-top:26px;color:#b8b4c8;font-family:\'Cormorant Garamond\',serif;font-style:italic;letter-spacing:.02em">painted and scored in code · samples: VS Chamber Orchestra CE &amp; VCSL (Versilian Studios), FreePats — CC0 · type: Cormorant (OFL)</div>';
+  credits.style.cssText = `position:fixed;left:0;right:0;top:${H / 2 + (640 - NATIVE.H / 2) * S}px;text-align:center;font-family:"Cormorant SC",serif;color:#efe2c4;letter-spacing:.08em;opacity:0;line-height:1.5;text-shadow:0 ${2 * S}px ${6 * S}px rgba(0,0,0,.5)`;
+  credits.innerHTML = `<div style="font-size:${38 * S}px">an impasto palette-knife study</div><div style="font-size:${30 * S}px;margin-top:${22 * S}px;color:#f6d690">Lemo-Opuscar &nbsp;·&nbsp; LemoLab × Claude Opus 5.5</div><div style="font-size:${21 * S}px;margin-top:${26 * S}px;color:#b8b4c8;font-family:'Cormorant Garamond',serif;font-style:italic;letter-spacing:.02em">painted and scored in code · samples: VS Chamber Orchestra CE &amp; VCSL (Versilian Studios), FreePats — CC0 · type: Cormorant (OFL)</div>`;
   document.body.appendChild(credits);
   window.DUR = DUR;
   return frame;
@@ -60,14 +69,14 @@ const POST = {
 // ================= SHOTS =================
 // 1 · ECU: the first bow stroke. The only colour in the world is the note.
 function shotEcu(t, tr) {
-  const cam = { x: EW / 2 + t * 18, y: EH / 2 + 10, zoom: lerp(.95, 1.04, ss(t / 2.8)) };
+  const cam = { x: EW / 2 + t * 18, y: EH / 2 + 10, zoom: lerp(.95, 1.04, ss(t / 2.8)) * S };
   plate(P.ecu, { t, cam, grey: 1, reveal: NEVER, ...tr });
   const lift = 1 - ss(seg(t, 0, .4));
   const p = t < T.hook ? 0 : eio(seg(t, T.hook, T.cutWide + .3));
   ecuBow(dyn, p, { y: 700, lift }); flush({ t, cam, grey: 1, reveal: NEVER, run: 0 });
   ribbon(dyn, u => bez([1010, 690], [760, 380], [360, 120], [-160, 40], u), t, T.hook + .05, 2.1, { cols: ['#f8c850', '#f0a030', '#ffdf80', '#e88a28'], wid: 46, n: 30, life: 1.6, drip: .7, seed: 1 });
   flush({ t, cam, grey: 0, run: .3 });
-  rain(dyn, t, { n: 70, near: .5, alpha: .5, seed: 2 }); flush({ t, grey: 0, hgt: .4 });
+  rain(dyn, t, { W, H, n: 70, near: .5, alpha: .5, seed: 2 }); flush({ t, grey: 0, hgt: .4 });
 }
 const bez = (a, b, c, d, u) => { const v = 1 - u; return [v * v * v * a[0] + 3 * v * v * u * b[0] + 3 * v * u * u * c[0] + u * u * u * d[0], v * v * v * a[1] + 3 * v * v * u * b[1] + 3 * v * u * u * c[1] + u * u * u * d[1]]; };
 
@@ -97,7 +106,7 @@ function smallCellist(t, cam, { notes, reveal, rest = 0, grey = 1 }) {
 
 // 2 · the grey square
 function shotWideGrey(t, tr) {
-  const cam = { x: lerp(1030, 1090, seg(t, T.cutWide, T.cutMed)), y: 600, zoom: lerp(.93, .975, ss(seg(t, T.cutWide, T.cutMed))) };
+  const cam = { x: lerp(1030, 1090, seg(t, T.cutWide, T.cutMed)), y: 600, zoom: lerp(.93, .975, ss(seg(t, T.cutWide, T.cutMed))) * S };
   plate(P.wide, { t, cam, grey: 1, reveal: NEVER, ...tr });
   smallCellist(t, cam, { notes: NA, reveal: NEVER });
   // each note sends a small amber ribbon out of the arch; the rain washes it down
@@ -108,14 +117,14 @@ function shotWideGrey(t, tr) {
   // title: laid in with the knife, then the rain takes it
   if (t > T.title) {
     const drift = Math.pow(seg(t, T.titleOut - .3, T.cutMed), 2);
-    plate(P.title, { t, cam: { x: W / 2, y: H / 2, zoom: 1 }, M: TR(210, 140 + drift * 60), grey: 0, appear: T.title, appDur: 1.1, alpha: 1 - drift, noUnder: true });
+    plate(P.title, { t, cam: { x: NATIVE.W / 2, y: NATIVE.H / 2, zoom: S }, M: TR(210, 140 + drift * 60), grey: 0, appear: T.title, appDur: 1.1, alpha: 1 - drift, noUnder: true });
   }
-  rain(dyn, t, { n: 230, alpha: .5, seed: 3 }); flush({ t, grey: 1, reveal: NEVER, hgt: .4 });
+  rain(dyn, t, { W, H, n: 230, alpha: .5, seed: 3 }); flush({ t, grey: 1, reveal: NEVER, hgt: .4 });
 }
 
 // 3 · medium: nobody stops
 function shotMedium(t, tr) {
-  const cam = { x: key(t, [[T.cutMed, 1000], [T.stop, 1060], [T.splash, 1215]]), y: key(t, [[T.cutMed, 565], [T.stop, 545], [T.splash, 430]]), zoom: key(t, [[T.cutMed, 1.0, lin1], [T.stop, 1.07], [T.splash, 1.32]]) };
+  const cam = { x: key(t, [[T.cutMed, 1000], [T.stop, 1060], [T.splash, 1215]]), y: key(t, [[T.cutMed, 565], [T.stop, 545], [T.splash, 430]]), zoom: key(t, [[T.cutMed, 1.0, lin1], [T.stop, 1.07], [T.splash, 1.32]]) * S };
   const o = { t, cam, grey: 1, reveal: NEVER };
   plate(P.med, { ...o, ...tr });
   rain(dyn, t, { W: 800, H: MH, n: 90, alpha: .55, seed: 4, xmax: 790 }); flush(o);
@@ -149,7 +158,7 @@ function cellistMedium(t, o, { notes, stopAt = 1e9, headDown = null, look = null
 function shotGirl(t, tr) {
   const pop = T.pop;
   const zoomKick = t > pop ? -.06 * Math.exp(-(t - pop) * 5) * Math.sin((t - pop) * 30) - .05 * eo(seg(t, pop, pop + .3)) : 0;
-  const cam = { x: key(t, [[12.4, GIRL_AT[0] + 60], [12.95, GIRL_AT[0] + 60], [13.95, 1270]]), y: key(t, [[12.4, GIRL_AT[1] - 170], [12.95, GIRL_AT[1] - 170], [13.95, 1170]]), zoom: key(t, [[12.4, 1.55], [12.95, 1.55], [13.95, .95]]) + zoomKick };
+  const cam = { x: key(t, [[12.4, GIRL_AT[0] + 60], [12.95, GIRL_AT[0] + 60], [13.95, 1270]]), y: key(t, [[12.4, GIRL_AT[1] - 170], [12.95, GIRL_AT[1] - 170], [13.95, 1170]]), zoom: (key(t, [[12.4, 1.55], [12.95, 1.55], [13.95, .95]]) + zoomKick) * S };
   const o = { t, cam, grey: 1, reveal: NEVER };
   plate(P.gbg, { ...o, ...tr });
   // her step lands exactly on the splash
@@ -183,12 +192,12 @@ function shotGirl(t, tr) {
     for (let j = 0; j < 22; j++) { const th = Math.PI * (1.05 + .9 * hash(j * 1.3)), v = 700 + hash(j * 2.1) * 900; dyn.push({ x: cx + Math.cos(th) * v * a, y: cy + Math.sin(th) * v * a + 900 * a * a, ang: th, len: 34 - a * 20, wid: 24 - a * 14, c: hex(j % 3 ? '#e03028' : '#ff6a4a'), seed: j + 100, type: 2, alpha: 1 - a / .8, hgt: 1.2 }); }
     flush({ t, cam, grey: 0 });
   }
-  rain(dyn, t, { n: 200, alpha: .5, seed: 5 }); flush({ t, grey: 1, reveal: NEVER, hgt: .4 });
+  rain(dyn, t, { W, H, n: 200, alpha: .5, seed: 5 }); flush({ t, grey: 1, reveal: NEVER, hgt: .4 });
 }
 
 // 5 · reaction: he looks up — and plays
 function shotReact(t, tr) {
-  const cam = { x: key(t, [[T.react, 1262], [T.bowIn, 1250], [T.cutStreet, 1150]]), y: key(t, [[T.react, 292], [T.bowIn, 330], [T.cutStreet, 520]]), zoom: key(t, [[T.react, 2.15], [T.bowIn, 1.95], [T.cutStreet, 1.28]]) };
+  const cam = { x: key(t, [[T.react, 1262], [T.bowIn, 1250], [T.cutStreet, 1150]]), y: key(t, [[T.react, 292], [T.bowIn, 330], [T.cutStreet, 520]]), zoom: key(t, [[T.react, 2.15], [T.bowIn, 1.95], [T.cutStreet, 1.28]]) * S };
   const o = { t, cam, grey: 1, reveal: T.bowIn + .2, revDur: .2, revC: [1260, 300, 1100] };
   plate(P.med, { ...o, revC: [CELL_AT[0], 600, 1000], ...tr });
   cellistMedium(t, { t, cam, grey: 1, reveal: T.bowIn, revDur: .2 }, { notes: NB, stopAt: -10, playFrom: T.bowIn, look: [T.react + .1, T.bowIn - .3], lift: ss(seg(t, T.bowIn - .6, T.bowIn - .25)) * (1 - ss(seg(t, T.bowIn - .12, T.bowIn))) });
@@ -233,7 +242,7 @@ function crowd(t, cam, { popped, closing = null, turnAt = 0, grey = 1 }) {
 
 // 6 · the street: one umbrella per beat
 function shotStreet(t, tr) {
-  const cam = { x: lerp(1180, 1230, seg(t, T.cutStreet, T.cutTop)), y: 700, zoom: lerp(1.2, 1.24, seg(t, T.cutStreet, T.cutTop)) };
+  const cam = { x: lerp(1180, 1230, seg(t, T.cutStreet, T.cutTop)), y: 700, zoom: lerp(1.2, 1.24, seg(t, T.cutStreet, T.cutTop)) * S };
   plate(P.wide, { t, cam, grey: 1, reveal: NEVER, ...tr });
   smallCellist(t, cam, { notes: NB, reveal: -1e6, grey: 0 });
   smallGirl(t, cam, { spin: t * 4 });
@@ -244,7 +253,7 @@ function shotStreet(t, tr) {
   flush({ t, cam, grey: 0 });
   crowd(t, cam, { popped: p => t >= p.pop });
   splashes(dyn, t, { x0: 0, x1: WW, y0: HZ + 30, y1: WH, n: 70, fs: y => figScale(y) + .15, alpha: .45 }); flush({ t, cam, grey: 1, reveal: NEVER });
-  rain(dyn, t, { n: 200, alpha: .45, seed: 7 }); flush({ t, grey: 1, reveal: NEVER, hgt: .4 });
+  rain(dyn, t, { W, H, n: 200, alpha: .45, seed: 7 }); flush({ t, grey: 1, reveal: NEVER, hgt: .4 });
 }
 
 // 7 · overhead: the dance paints the square
@@ -278,7 +287,7 @@ function dancePos(u, tt) {   // tt = seconds since the overhead cut (frozen at t
 }
 function shotTop(t, tr) {
   const tf = Math.min(t, T.gp), tt = tf - T.cutTop;
-  const cam = { x: TC[0], y: TC[1], zoom: key(tf, [[T.cutTop, 1.32], [TB(11), .6]]), rot: key(tf, [[T.cutTop, 0, lin1], [T.gp, .62]]) };
+  const cam = { x: TC[0], y: TC[1], zoom: key(tf, [[T.cutTop, 1.32], [TB(11), .6]]) * S, rot: key(tf, [[T.cutTop, 0, lin1], [T.gp, .62]]) };
   const o = { t, cam, grey: 1, reveal: NEVER };
   plate(P.top, { ...o, ...tr });
   // trails: each umbrella drips its colour along its path
@@ -306,7 +315,7 @@ function shotTop(t, tr) {
 
 // 8 · finale: the chord floods the square with colour; the sun rakes across the paint
 function shotFinale(t, tr) {
-  const zoom = key(t, [[T.chord, .925], [T.last + .3, 1.04]]), half = W / 2 / zoom;
+  const zoom = key(t, [[T.chord, .925], [T.last + .3, 1.04]]) * S, half = W / 2 / zoom;
   const cam = { x: Math.min(WW - half - 4, key(t, [[T.chord, 1056], [T.last + .3, 1180]])), y: key(t, [[T.chord, 596], [T.last + .3, 630]]), zoom };
   plate(P.wide, { t, cam, grey: 1, reveal: T.chord - .05, revDur: .18, revC: [ARCH.x, ARCH.y, 1500], ...tr });
   smallCellist(t, cam, { notes: NB, reveal: -1e6, grey: 0 });
@@ -320,7 +329,7 @@ function shotFinale(t, tr) {
 
 // 9 · end card
 function shotEnd(t, tr) {
-  plate(P.end, { t, cam: { x: W / 2, y: H / 2, zoom: 1 }, grey: 0, ...tr });
+  plate(P.end, { t, cam: { x: NATIVE.W / 2, y: NATIVE.H / 2, zoom: S }, grey: 0, ...tr });
 }
 
 // ================= EDIT =================
@@ -329,11 +338,12 @@ const EDIT = [
   [0, shotEcu, 0, 'grey'], [T.cutWide, shotWideGrey, .45, 'grey'], [T.cutMed, shotMedium, .35, 'grey'], [T.splash - .22, shotGirl, 0, 'grey'],
   [T.react, shotReact, 0, 'warm'], [T.cutStreet, shotStreet, .3, 'grey'], [T.cutTop, shotTop, .45, 'warm'], [T.chord, shotFinale, 0, 'warm'], [T.last, shotEnd, .8, 'warm'],
 ];
-function frame(t) {
+function frame(t, o = {}) {
+  setFrame(o.W ?? NATIVE.W, o.H ?? NATIVE.H);
   let i = 0; while (i < EDIT.length - 1 && t >= EDIT[i + 1][0]) i++;
   E.begin();
   const [t0, fn, d, look] = EDIT[i];
-  let post = { ...POST[look] };
+  let post = { ...POST[look], vigA: 1.78 * FX / FY };
   if (d > 0 && t < t0 + d && i > 0) { EDIT[i - 1][1](t, {}); fn(t, { appear: t0, appDur: d }); }
   else fn(t, {});
   // finale light: a low sun rakes across the paint, then settles

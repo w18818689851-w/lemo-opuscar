@@ -3,6 +3,12 @@ import { clamp, lerp, seg, ss, eio, eo, ei, back, hash } from '../../../core/lib
 import { WIN, TERM, LOGO } from './ui.js';
 import * as CW from './clawd.js';
 
+// FILM_META.aspects —— 这部影片**真的能正确构图**的输出比例清单（**字面量**：控制台按源码文本探测，不是求值，
+// 见 D:\lemo-tools\lib\aspects.mjs）。不写 = 只支持 16:9（= 没改造过，按 1920×1080 绝对像素构图、给别的尺寸会被裁）。
+// 已适配多比例：渲染器把浏览器视口设成输出尺寸，main.js 读视口算紧轴缩放 S 与居中偏移，把整个设计帧
+// （世界层 + HUD/字幕/转场/片尾卡）等比装入当前帧；1920×1080 时 S=1、偏移 0 ⇒ 逐字节退化成设计帧。
+export const FILM_META = { id: 'clawd-moves-in', title: 'Clawd Moves In', style: 'Living Screencast', aspects: ['16:9', '9:16'] };
+
 export const BPM = 100, B = 60 / BPM;            // 0.6 s 一拍；段落切点都落在拍上
 export const DUR = 59.4;
 export const VO = { v01: 2.3, v02: 3.5, v03: 6.2, v04: 10.9, v05: 13.5, v06: 16.1, v07: 20.3, v08: 22.9, v09: 28.1, v10: 30.5, v11: 32.8,

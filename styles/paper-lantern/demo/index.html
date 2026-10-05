@@ -13,5 +13,40 @@ html, body { margin: 0; background: #000; overflow: hidden; }
 </style>
 <script type="importmap">{ "imports": { "three": "/node_modules/three/build/three.module.js", "three/addons/": "/node_modules/three/examples/jsm/" } }</script>
 </head><body><canvas id="c"></canvas><div id="sub"></div><div id="credit"></div>
+<script>
+// ── 视口等比装入（设计帧 1920×1080 → 当前帧 = 视口）────────────────────────────
+// 影片本体按**固定设计帧 1920×1080** 绘制，一字未改（#c 画布与 #sub / #credit 叠加层都是 1920×1080）。
+// 本脚本只做一件事：当前帧不是 1920×1080 时，把**整张设计帧**等比装入（contain）并居中，留边露出
+// 本风格的**暖夜底色 #0a1330**（取自 palette 夜空最深一段；是夜色调，不是纯黑）。
+// ★ 1920×1080 时**完全不碰 DOM**（不建包装层、不设 transform、不改底色）⇒ 与改造前逐字节相同；
+//   也只有这一个页面外壳文件被改，任何「画布尺寸 = 设计帧」的 demo 都能照抄这个范式。
+(function () {
+  var NW = 1920, NH = 1080, BG = '#0a1330', wrap = null, ids = ['c', 'sub', 'credit'];
+  function unwrap() {                              // 回到设计帧尺寸：拆掉包装层、还原底色
+    if (!wrap) return;
+    var p = wrap.parentNode;
+    while (wrap.firstChild) p.insertBefore(wrap.firstChild, wrap);
+    p.removeChild(wrap); wrap = null;
+    document.documentElement.style.background = '';
+    document.body.style.background = '';
+  }
+  function layout() {
+    var W = window.innerWidth, H = window.innerHeight;
+    if (W === NW && H === NH) { unwrap(); return; }          // 设计帧 = 当前帧 ⇒ 原样
+    var k = Math.min(W / NW, H / NH);                        // 等比装入的紧轴缩放
+    if (!wrap) {
+      var host = document.getElementById('c');
+      wrap = document.createElement('div');
+      wrap.style.cssText = 'position:absolute;left:0;top:0;width:' + NW + 'px;height:' + NH + 'px;transform-origin:0 0';
+      host.parentNode.insertBefore(wrap, host);
+      for (var i = 0; i < ids.length; i++) { var el = document.getElementById(ids[i]); if (el) wrap.appendChild(el); }
+    }
+    wrap.style.transform = 'translate(' + ((W - k * NW) / 2) + 'px,' + ((H - k * NH) / 2) + 'px) scale(' + k + ')';
+    document.documentElement.style.background = BG;
+    document.body.style.background = BG;
+  }
+  layout(); addEventListener('resize', layout);
+})();
+</script>
 <script type="module" src="src/main.js"></script>
 </body></html>

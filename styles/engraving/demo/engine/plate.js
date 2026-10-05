@@ -9,6 +9,10 @@ export const PAL = {
   bevelDark: 'rgba(96,70,40,0.42)', bevelLight: 'rgba(255,251,240,0.95)',
 };
 export const FONTS = { roman: 'Bodoni Moda', script: 'Pinyon Script' };
+// Language font sets: the film calls setFonts({ roman, script }) once at start-up to swap in another
+// script's faces (e.g. a CJK cut). It mutates FONTS in place, so every importer and every per-call
+// default (`font = FONTS.roman`) keeps seeing the live values. Never called => the Latin defaults stand.
+export function setFonts(f) { if (f) for (const k of Object.keys(f)) if (f[k]) FONTS[k] = f[k]; return FONTS; }
 
 // ---------- paper: a world-space texture (laid lines, fibres, foxing), built once ----------
 let paperCache = null;
@@ -61,8 +65,11 @@ export function borderInk(ink, [x0, y0, x1, y1], { gap = 9 } = {}) {
 // ---------- engraved lettering ----------
 // Roman capitals are cut glyph by glyph (each glyph wipes in from the left, as the burin travels);
 // script is written in one continuous stroke from left to right with a soft wet edge.
+// A font value is either a bare family ("Noto Serif SC") or an already-quoted stack
+// ('"Bodoni Moda", "Noto Serif SC"'); only the bare one gets quoted, so a stack survives as valid CSS.
+const fontSpec = f => /[,"']/.test(f) ? f : `"${f}"`;
 export function measure(ctx, str, { size = 40, font = FONTS.roman, weight = 500, italic = false, track = 0 } = {}) {
-  ctx.save(); ctx.font = `${italic ? 'italic ' : ''}${weight} ${size}px "${font}"`;
+  ctx.save(); ctx.font = `${italic ? 'italic ' : ''}${weight} ${size}px ${fontSpec(font)}`;
   const chars = [...str], ws = chars.map(ch => ctx.measureText(ch).width), tw = ws.reduce((a, b) => a + b, 0) + track * size * Math.max(0, chars.length - 1);
   ctx.restore(); return { chars, ws, tw };
 }
@@ -70,7 +77,7 @@ export function engraveText(ctx, str, x, y, o = {}) {
   const { size = 40, font = FONTS.roman, weight = 500, italic = false, track = 0, align = 'center', color = PAL.ink, p = 1, alpha = 1 } = o;
   if (p <= 0 || !str) return;
   const { chars, ws, tw } = measure(ctx, str, o);
-  ctx.save(); ctx.font = `${italic ? 'italic ' : ''}${weight} ${size}px "${font}"`; ctx.fillStyle = color; ctx.textBaseline = 'alphabetic'; ctx.globalAlpha = alpha;
+  ctx.save(); ctx.font = `${italic ? 'italic ' : ''}${weight} ${size}px ${fontSpec(font)}`; ctx.fillStyle = color; ctx.textBaseline = 'alphabetic'; ctx.globalAlpha = alpha;
   let cx = align === 'center' ? x - tw / 2 : align === 'right' ? x - tw : x;
   const N = chars.length, shown = p * (N + 2);
   for (let i = 0; i < N; i++) {
@@ -86,7 +93,7 @@ export function engraveText(ctx, str, x, y, o = {}) {
 export function writeScript(ctx, str, x, y, o = {}) {
   const { size = 40, font = FONTS.script, color = PAL.ink, align = 'center', p = 1, alpha = 1, weight = 400 } = o;
   if (p <= 0 || !str) return;
-  ctx.save(); ctx.font = `${weight} ${size}px "${font}"`; ctx.textBaseline = 'alphabetic';
+  ctx.save(); ctx.font = `${weight} ${size}px ${fontSpec(font)}`; ctx.textBaseline = 'alphabetic';
   const tw = ctx.measureText(str).width, x0 = align === 'center' ? x - tw / 2 : align === 'right' ? x - tw : x;
   const edge = x0 - size * 0.3 + (tw + size * 0.6) * clamp(p);
   ctx.globalAlpha = alpha;
@@ -113,10 +120,16 @@ export function fitLines(ctx, str, maxW, o) {
 // content: { ink, regions } built for radius 500 local units. The roundel draws at centre (x, y) with radius r.
 export function roundelFrame(ctx, x, y, r, { p = 1, w = 2.2 } = {}) {
   if (p <= 0) return;
+  // r comes from the film's layout as RR * S, with S = min(W/1920, H/1080). On a very small frame S
+  // collapses, and the inner ring's `r - offset` (offset = max(3.5, r*0.035)) goes negative — which
+  // ctx.arc() rejects with IndexSizeError, an uncaught throw that kills the whole render. Clamp the two
+  // radii to 0 so a tiny frame degrades to a degenerate ring instead of throwing. Both quantities are
+  // positive at any ordinary frame, so this is a no-op there (1920×1080 stays bit-identical).
+  const rOut = Math.max(0, r), rIn = Math.max(0, r - Math.max(3.5, r * 0.035));
   ctx.save(); ctx.strokeStyle = PAL.ink; ctx.lineCap = 'round';
   const a0 = -Math.PI / 2 - 0.4, a1 = a0 + Math.PI * 2 * clamp(p);
-  ctx.lineWidth = w; ctx.beginPath(); ctx.arc(x, y, r, a0, a1); ctx.stroke();
-  ctx.lineWidth = w * 0.38; ctx.beginPath(); ctx.arc(x, y, r - Math.max(3.5, r * 0.035), a0, a0 + Math.PI * 2 * clamp(p * 1.1 - 0.1)); ctx.stroke();
+  ctx.lineWidth = w; ctx.beginPath(); ctx.arc(x, y, rOut, a0, a1); ctx.stroke();
+  ctx.lineWidth = w * 0.38; ctx.beginPath(); ctx.arc(x, y, rIn, a0, a0 + Math.PI * 2 * clamp(p * 1.1 - 0.1)); ctx.stroke();
   ctx.restore();
 }
 // leader line from a point on the figure to the rim of a roundel, with a tiny reference number near its root
@@ -133,9 +146,92 @@ export function leader(ctx, from, to, { p = 1, w = 0.9, num = null, numP = 1, si
     engraveText(ctx, num, m[0], m[1], { size, italic: true, weight: 500, p: numP });
   }
 }
+// ---------- CJK line breaking ----------
+// CJK text has no word spaces, so it is set character by character with the usual 禁则 (kinsoku) rules:
+// closing punctuation may not open a line, opening brackets may not end one.
+// what makes a string "CJK": ideographs, kana, CJK punctuation and fullwidth forms. Deliberately narrow —
+// · — … “ ” are common in Latin setting too, so they must NOT send a Latin string down the CJK path.
+const CJK = /[\u3000-\u303F\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFFEF]/;
+// once we are in CJK, those same dashes/quotes do behave as CJK punctuation, so they become their own atoms
+const CJK_ATOM = /[\u3000-\u303F\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFFEF\u00B7\u2014\u2015\u2026\u2018\u2019\u201C\u201D]/;
+// 行首禁则: a line may not begin with these (pull them back onto the previous line)
+const NO_HEAD = new Set([...'、。，．；：？！）」』】》〉·…—”’']);
+// 行尾禁则: a line may not end with these (push them onto the next line)
+const NO_TAIL = new Set([...'（「『【《〈“‘']);
+// breaking right after one of these is a clause boundary, which is where a Chinese note wants to wrap
+const CLAUSE = new Set([...'。，、；：？！．…—,.;:?!']);
+const isCJK = s => CJK.test(s);
+// Chinese has no word spaces, so the only thing telling us where a word ends is a segmenter.
+// Intl.Segmenter ships a Chinese dictionary in the browser; without it we fall back to breaking
+// between any two characters, which is the old behaviour.
+const SEG = (() => { try { return new Intl.Segmenter('zh', { granularity: 'word' }); } catch { return null; } })();
+// split into units: one unit per word, one per CJK punctuation mark, one per run of Latin.
+// `sp` remembers that whitespace preceded the unit; `wid` is the word it belongs to (null for punctuation).
+function cjkUnits(str) {
+  const owner = new Map();   // character offset -> id of the word-like segment that owns it
+  if (SEG) { let id = 0; for (const s of SEG.segment(str)) { if (!s.isWordLike) continue; id++; for (let i = s.index; i < s.index + s.segment.length; i++) owner.set(i, id); } }
+  const out = []; let buf = '', sp = false, off = 0, bufOff = 0;
+  const flush = () => { if (buf) { out.push({ s: buf, sp, wid: owner.get(bufOff) }); buf = ''; sp = false; } };
+  for (const ch of str) {
+    if (/\s/.test(ch)) { flush(); sp = true; }
+    else if (CJK_ATOM.test(ch)) { flush(); out.push({ s: ch, sp, wid: owner.get(off) }); sp = false; }
+    else { if (!buf) bufOff = off; buf += ch; }
+    off += ch.length;
+  }
+  flush();
+  // glue the characters of one word into a single unit so no break can fall inside it (茉莉, 咖啡豆, …)
+  const units = [];
+  for (const a of out) { const p = units[units.length - 1]; if (p && a.wid != null && p.wid === a.wid) p.s += a.s; else units.push(a); }
+  return units;
+}
+const joinAtoms = its => its.map((a, i) => (i && a.sp ? ' ' : '') + a.s).join('');
+function wrapCJK(ctx, str, maxW, o) {
+  // a unit that cannot fit on a line of its own is the only thing we break mid-word
+  const atoms = [];
+  for (const a of cjkUnits(str)) {
+    if (a.s.length > 1 && measure(ctx, a.s, o).tw > maxW) { let first = true; for (const ch of a.s) { atoms.push({ s: ch, sp: first ? a.sp : false }); first = false; } }
+    else atoms.push(a);
+  }
+  const lines = []; let cur = [];
+  for (const a of atoms) { if (!cur.length) cur = [a]; else if (measure(ctx, joinAtoms([...cur, a]), o).tw <= maxW) cur.push(a); else { lines.push(cur); cur = [a]; } }
+  if (cur.length) lines.push(cur);
+  const wid = its => measure(ctx, joinAtoms(its), o).tw;
+  // two lines: even them out, exactly as the Latin path does, so a note never ends on a short orphan
+  if (lines.length === 2) {
+    const all = [...lines[0], ...lines[1]], cands = [];
+    for (let k = 1; k < all.length; k++) {
+      const wa = wid(all.slice(0, k)), wb = wid(all.slice(k));
+      if (wa > maxW || wb > maxW) continue;
+      cands.push({ m: Math.max(wa, wb), k, clause: CLAUSE.has(all[k - 1].s.slice(-1)) });
+    }
+    if (cands.length) {
+      const mBest = Math.min(...cands.map(c => c.m)), pool = cands.filter(c => c.m <= mBest + maxW * 0.02);
+      const pick = pool.find(c => c.clause) || pool[pool.length - 1];   // prefer a clause break, else the fuller first line
+      lines.length = 0; lines.push(all.slice(0, pick.k), all.slice(pick.k));
+    }
+  }
+  // three lines or more: a last line holding one lone unit reads as an orphan — hand it the unit above
+  if (lines.length >= 3) {
+    const last = lines[lines.length - 1], prev = lines[lines.length - 2];
+    if (last.length === 1 && prev.length > 1) last.unshift(prev.pop());
+  }
+  // 行尾禁则 — an opening bracket never ends a line: hand it to the next one
+  for (let i = 0; i < lines.length; i++) {
+    const L = lines[i];
+    if (NO_TAIL.has(L[L.length - 1].s) && (L.length > 1 || i < lines.length - 1)) {
+      const m = L.pop();
+      if (lines[i + 1]) lines[i + 1].unshift({ s: m.s, sp: false }); else lines.push([{ s: m.s, sp: false }]);
+    }
+  }
+  // 行首禁则 — closing punctuation never opens a line: pull it back (the line above is allowed to run a little wide)
+  for (let i = 1; i < lines.length; i++) { const L = lines[i], P = lines[i - 1]; while (L.length && NO_HEAD.has(L[0].s)) P.push({ s: L.shift().s, sp: false }); }
+  return lines.filter(L => L.length).map(joinAtoms);
+}
 // wrap a string into lines no wider than maxW at a fixed size (the size never changes; long text gets more lines)
 export function wrapLines(ctx, str, maxW, o) {
-  const words = String(str || '').split(/\s+/).filter(Boolean), lines = []; let cur = '';
+  const s = String(str || '');
+  if (isCJK(s)) return wrapCJK(ctx, s, maxW, o);
+  const words = s.split(/\s+/).filter(Boolean), lines = []; let cur = '';
   for (const w of words) { const t = cur ? cur + ' ' + w : w; if (!cur || measure(ctx, t, o).tw <= maxW) cur = t; else { lines.push(cur); cur = w; } }
   if (cur) lines.push(cur);
   // balance two-line notes so no word is left alone on the second line

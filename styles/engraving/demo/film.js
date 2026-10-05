@@ -11,16 +11,46 @@ import { buildScallop } from './subjects/scallop.js';
 const SUBJECTS = { bee: buildBee, scallop: buildScallop };
 import { clamp, eio, eo, ss } from '/core/lib.js';
 
-export const W = 1920, H = 1080, BEAT = 0.625;
-const PLATE = [70, 44, 1850, 1036], BORDER = [100, 72, 1820, 1008];
-const SLOTS = { UL: [300, 300], LL: [300, 700], LR: [1620, 700], UR: [1620, 300] }, SLOT_ORDER = ['UL', 'LL', 'LR', 'UR'], RR = 120;
-const NOTE = { size: 29, width: 380, lead: 1.12 };               // one size for every note; long notes wrap, never shrink
+// The plate is authored for one frame — NATIVE, the 1920×1080 the design was drawn on. makeFilm re-derives the
+// whole layout for whatever frame it is given (main.js hands it the viewport; 9:16 is the product default):
+//   fx, fy  map a position across/up the frame, so the sheet always fills it whatever its shape;
+//   S       scales every SIZE (radii, type, rules, leads) by the tighter axis — the ink keeps its weight and the
+//           four label columns still fit between the roundels and the plate edges on a narrow, tall frame.
+// At 1920×1080 fx = fy = S = 1, so every expression below reduces to exactly the number it replaced: the 16:9
+// picture is byte-for-byte what it always was. Nothing here may be evaluated at module load — it needs W and H.
+export const NATIVE = { W: 1920, H: 1080 }, BEAT = 0.625;
+function layout(W, H) {
+  const fx = W / NATIVE.W, fy = H / NATIVE.H, S = Math.min(fx, fy);
+  const PLATE = [70 * fx, 44 * fy, 1850 * fx, 1036 * fy], BORDER = [100 * fx, 72 * fy, 1820 * fx, 1008 * fy];
+  // the four roundel slots: one to a corner, each with its label column below it
+  const SLOTS = { UL: [300 * fx, 300 * fy], LL: [300 * fx, 700 * fy], LR: [1620 * fx, 700 * fy], UR: [1620 * fx, 300 * fy] };
+  const SLOT_ORDER = ['UL', 'LL', 'LR', 'UR'], RR = 120 * S;
+  const NOTE = { size: 29 * S, width: 380 * S, lead: 1.12 };        // one size for every note; long notes wrap, never shrink
+  // the 9 probe offsets the leader test samples around each point on the line; they depend only on
+  // k, so they are built once here instead of recomputing cos/sin for every sample of every candidate
+  const LEAD_OFF9 = Array.from({ length: 9 }, (_, k) => { const rr = k ? 34 * S : 0, an = k * Math.PI / 4; return [Math.cos(an) * rr, Math.sin(an) * rr]; });
+  return { W, H, fx, fy, S, PLATE, BORDER, SLOTS, SLOT_ORDER, RR, NOTE, LEAD_OFF9 };
+}
+
+// FILM_META.aspects —— 这部影片**真的能正确构图**的输出比例清单。
+//   · 这里能列出 5 个，是因为 makeFilm 从 opts.W/opts.H 重排了整个版面（见 layout() 上面的说明）：
+//     版框、四角圆窗槽位、字幕条随帧拉伸（fx/fy），圆窗半径、字号、引线、线宽、排线步长随 S = min(fx,fy) 缩放。
+//     1920×1080 时 fx = fy = S = 1，逐字节退化成设计帧，所以 16:9 与改造前完全一致。
+//   · 语义（全库约定）：aspects 列出「这部影片真的能正确构图」的比例；**不写 = 只支持 16:9**
+//     （即「没改造过」，按 1920×1080 的绝对像素构图，给别的尺寸会被裁切）。
+//   · 控制台靠**读这段源码文本**探测它（影片模块是浏览器 ESM，node 不能 import），
+//     见 D:\lemo-tools\lib\aspects.mjs。所以这个字面量要保持「aspects 后跟一个方括号数组」的形状。
+export const FILM_META = { id: 'bee', title: 'The Honeybee', style: 'Copperplate Engraving', aspects: ['16:9', '9:16', '3:4', '4:3', '1:1'] };
 const seg = (t, a, b) => clamp((t - a) / (b - a));
 const lerp = (a, b, t) => a + (b - a) * t;
 
-export function makeFilm(C, voiceDur = {}) {
+export function makeFilm(C, voiceDur = {}, opts = {}) {
+  // The frame we are drawing into. main.js hands us the viewport; without opts we keep the design frame, so a
+  // caller that never asked for a size gets exactly the picture this film has always produced.
+  const W = opts.W ?? NATIVE.W, H = opts.H ?? NATIVE.H;
+  const { fx, fy, S, PLATE, BORDER, SLOTS, SLOT_ORDER, RR, NOTE, LEAD_OFF9 } = layout(W, H);
   const subject = SUBJECTS[C.subject] ? C.subject : 'bee';
-  const bee = SUBJECTS[subject]({ x: 960, y: 606, s: 1 });
+  const bee = SUBJECTS[subject]({ x: W / 2, y: 606 * fy, s: S });
   const details = (C.details || []).slice(0, 4);
 
   // ------------------------------------------------------------------ timeline (seconds)
@@ -56,7 +86,7 @@ export function makeFilm(C, voiceDur = {}) {
   for (const d of dets) {
     d.slotName = SLOT_ORDER[d.i]; d.slot = SLOTS[d.slotName];
     const f = bee.focus[d.focus] || bee.focus.eye;
-    const left = d.slot[0] < W / 2, mx = x => left === (x < 960) ? x : 1920 - x;   // the instance on the slot's side
+    const left = d.slot[0] < W / 2, mx = x => left === (x < W / 2) ? x : W - x;   // the instance on the slot's side
     d.f = { x: mx(f.x), y: f.y, r: f.r };
     // a drawn magnification when the library has one for this part; otherwise the roundel magnifies the figure itself
     d.art = subject === 'bee' && DETAILS[d.focus] ? buildDetail(d.focus) : { magnify: true, regions: {} };
@@ -77,13 +107,19 @@ export function makeFilm(C, voiceDur = {}) {
     d.lab = { name: `FIG. ${d.i + 1}  ·  ${String(d.name || '').toUpperCase()}`, latin: d.latin || '', note: d.note || '' };
     // the leader: straight if it can reach the roundel without crossing a wing or the body, else via a waypoint
     const obs = obstacles(subject === 'bee' ? ({ eye: 'head', hamuli: 'wings', corbicula: '' }[d.focus] ?? '') : '').filter(p => !B.inPoly([p], d.f.x, d.f.y));
+    // obs is built here and only read below, so its ring bounds can be computed once and reused by
+    // every clear() sample. This is the fix for the ~30 s build: the waypoint search below asks
+    // "does this segment cross the body?" ~1.8M times, and the box test rejects nearly all of them
+    // before any ray-cast. See prepareRings() in engine/burin.js for why the bounds must live here
+    // and must NOT be memoised inside inAny.
+    const obsB = B.prepareRings(obs);
     const rim = (px, py) => { const dx = px - d.slot[0], dy = py - d.slot[1], L = Math.hypot(dx, dy); return [d.slot[0] + dx / L * RR, d.slot[1] + dy / L * RR]; };
-    const clear = (a0, b0) => { const L = Math.hypot(b0[0] - a0[0], b0[1] - a0[1]); for (let q = 14; q < L; q += 4) { const x = a0[0] + (b0[0] - a0[0]) * q / L, y = a0[1] + (b0[1] - a0[1]) * q / L; for (let k = 0; k < 9; k++) { const rr = k ? 34 : 0, an = k * Math.PI / 4; if (B.inAny(obs, x + Math.cos(an) * rr, y + Math.sin(an) * rr)) return false; } } return true; };
+    const clear = (a0, b0) => { const L = Math.hypot(b0[0] - a0[0], b0[1] - a0[1]); for (let q = 14 * S; q < L; q += 4 * S) { const x = a0[0] + (b0[0] - a0[0]) * q / L, y = a0[1] + (b0[1] - a0[1]) * q / L; for (let k = 0; k < 9; k++) { const o = LEAD_OFF9[k]; if (B.inAnyPrepared(obsB, x + o[0], y + o[1])) return false; } } return true; };
     const len = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]);
     let best = null; const r0 = rim(d.f.x, d.f.y);
     if (clear([d.f.x, d.f.y], r0)) best = { wp: null, L: len([d.f.x, d.f.y], r0) };
-    else for (let gx = 140; gx <= 1780; gx += 20) for (let gy = 90; gy <= 990; gy += 20) {
-      const wp = [gx, gy], r1 = rim(gx, gy); if (Math.hypot(gx - d.slot[0], gy - d.slot[1]) < RR + 20) continue;
+    else for (let gx = 140 * fx; gx <= 1780 * fx; gx += 20 * S) for (let gy = 90 * fy; gy <= 990 * fy; gy += 20 * S) {
+      const wp = [gx, gy], r1 = rim(gx, gy); if (Math.hypot(gx - d.slot[0], gy - d.slot[1]) < RR + 20 * S) continue;
       if (!clear([d.f.x, d.f.y], wp) || !clear(wp, r1)) continue; const L = len([d.f.x, d.f.y], wp) + len(wp, r1);
       if (!best || L < best.L) best = { wp, L };
     }
@@ -99,7 +135,7 @@ export function makeFilm(C, voiceDur = {}) {
   cOrder.forEach((name, k) => {
     const r = bee.regions[name]; if (!r) return;
     const t0 = c0 + k * 0.42, origin = name === 'abdomen' ? [r.bbox[0] + (r.bbox[2] - r.bbox[0]) * 0.35, r.bbox[1] + (r.bbox[3] - r.bbox[1]) * 0.3] : null;
-    wash.add({ path: r.path, polys: r.polys, color: colours[name], alpha: name === 'wings' ? 0.5 : name === 'pollen' ? 0.95 : 0.72, origin, t0, dur: name === 'wings' ? 1.6 : 1.25, seed: k + 1, spill: name === 'pollen' ? 2.5 : 3.5, lift: name === 'wings' ? 0.8 : 0.55 });
+    wash.add({ path: r.path, polys: r.polys, color: colours[name], alpha: name === 'wings' ? 0.5 : name === 'pollen' ? 0.95 : 0.72, origin, t0, dur: name === 'wings' ? 1.6 : 1.25, seed: k + 1, spill: (name === 'pollen' ? 2.5 : 3.5) * S, lift: name === 'wings' ? 0.8 : 0.55 });
     dets.forEach((d, j) => { for (const [rn, rr] of Object.entries(d.art.regions)) { if (rn !== name && !(rn === 'hooks' && name === 'legs')) continue; dWash[j].add({ path: rr.path, polys: rr.polys, color: colours[name], alpha: name === 'wings' ? 0.45 : name === 'pollen' ? 0.92 : name === 'head' ? 0.4 : name === 'eyes' ? 0.55 : 0.6, t0: t0 + 0.15, dur: 1.3, seed: k + 11 + j, spill: 12, offset: [7, 5] }); } });
   });
 
@@ -120,27 +156,27 @@ export function makeFilm(C, voiceDur = {}) {
     const k0 = Math.max(0, j - 3), k1 = Math.min(first.n - 1, j + 4), dx = xy[2 * k1] - xy[2 * k0], dy = xy[2 * k1 + 1] - xy[2 * k0 + 1], L = Math.hypot(dx, dy) || 1;
     return { x, y, dx: dx / L, dy: dy / L }; };
   const HOOKZ = 4.2;
-  const followCam = t => { const tp = tipAt(Math.min(t, T.lift)); return { cx: tp.x + 20, cy: tp.y + 30, z: HOOKZ * (1 - 0.03 * Math.min(t, 3)), rot: -0.05 + 0.012 * Math.min(t, 3) }; };
-  const WIDE = { cx: 960, cy: 540, z: 1, rot: 0 };
+  const followCam = t => { const tp = tipAt(Math.min(t, T.lift)); return { cx: tp.x + 20 * S, cy: tp.y + 30 * S, z: HOOKZ * (1 - 0.03 * Math.min(t, 3)), rot: -0.05 + 0.012 * Math.min(t, 3) }; };
+  const WIDE = { cx: W / 2, cy: H / 2, z: 1, rot: 0 };
   const keys = [];
   const K = (t, c, e = eio) => keys.push([t, c, e]);
   K(T.peel[1], followCam(T.peel[1]));
   K(6.2, WIDE);
   K(T.d0, WIDE);
   const frameFor = d => {
-    const cx = d.slot[0] < 960 ? 700 : 1258;
-    if (d.i === 0) return { cx, cy: d.slot[1] < 540 ? 440 : 640, z: 1.45, rot: 0 };
-    if (d.role === 'B') return { cx, cy: 702, z: 1.45, rot: 0 };
-    return { cx, cy: d.slot[1] < 540 ? 378 : 702, z: 1.45, rot: 0 };        // read-in framing after the wide
+    const cx = d.slot[0] < W / 2 ? 700 * fx : 1258 * fx;
+    if (d.i === 0) return { cx, cy: (d.slot[1] < H / 2 ? 440 : 640) * fy, z: 1.45, rot: 0 };
+    if (d.role === 'B') return { cx, cy: 702 * fy, z: 1.45, rot: 0 };
+    return { cx, cy: (d.slot[1] < H / 2 ? 378 : 702) * fy, z: 1.45, rot: 0 };        // read-in framing after the wide
   };
   for (const d of dets) {
     const a = d.a, fr = frameFor(d);
-    if (d.i === 0) { d.st = { x: d.f.x + 14, y: d.f.y + 2 }; K(a.push[1], { cx: d.f.x + 18, cy: d.f.y + 4, z: 4.3, rot: 0.012 }); K(a.travel[0], { cx: d.st.x, cy: d.st.y, z: 4.5, rot: 0.01 }, x => x); K(a.travel[1] + 0.6, fr); K(d.s + d.D, fr, x => x); }
+    if (d.i === 0) { d.st = { x: d.f.x + 14 * S, y: d.f.y + 2 * S }; K(a.push[1], { cx: d.f.x + 18 * S, cy: d.f.y + 4 * S, z: 4.3, rot: 0.012 }); K(a.travel[0], { cx: d.st.x, cy: d.st.y, z: 4.5, rot: 0.01 }, x => x); K(a.travel[1] + 0.6, fr); K(d.s + d.D, fr, x => x); }
     else if (d.role === 'B') { K(a.push[1], fr); K(d.s + d.D, fr, x => x); }
     else { K(a.push[1], WIDE); K(d.s + 2.9, WIDE, x => x); K(d.s + 3.9, fr); K(d.s + d.D, fr, x => x); }
   }
   K(T.gather[1] - 0.1, WIDE); K(T.colour[0], WIDE);
-  K(T.colour[0] + 2.5, { cx: 962, cy: 546, z: 1.02, rot: -0.0015 }); K(T.colour[1], WIDE);
+  K(T.colour[0] + 2.5, { cx: 962 * fx, cy: 546 * fy, z: 1.02, rot: -0.0015 }); K(T.colour[1], WIDE);
   K(T.end[1] + 1, WIDE);
   const camAt = t => {
     if (t <= T.peel[1]) return followCam(t);
@@ -149,8 +185,8 @@ export function makeFilm(C, voiceDur = {}) {
     if (d0 && t >= d0.a.travel[0] && t <= d0.a.travel[1] + 0.6) {
       const a = d0.a, u = seg(t, a.travel[0], a.travel[1] + 0.6), r = roundelAt(d0, Math.min(t, a.travel[1])), fr = frameFor(d0);
       const z = Math.exp(lerp(Math.log(4.5), Math.log(fr.z), eio(u))), w = Math.pow(ss(u), 1.6), k0 = ss(seg(t, a.travel[0], a.travel[0] + 0.5));
-      const fx = lerp(d0.st.x, r.x + (fr.cx - d0.slot[0]) * 0.35, k0), fy = lerp(d0.st.y, r.y + (fr.cy - d0.slot[1]) * 0.35, k0);
-      return { cx: lerp(fx, fr.cx, w), cy: lerp(fy, fr.cy, w), z, rot: lerp(0.01, 0, u) };
+      const fpx = lerp(d0.st.x, r.x + (fr.cx - d0.slot[0]) * 0.35, k0), fpy = lerp(d0.st.y, r.y + (fr.cy - d0.slot[1]) * 0.35, k0);
+      return { cx: lerp(fpx, fr.cx, w), cy: lerp(fpy, fr.cy, w), z, rot: lerp(0.01, 0, u) };
     }
     let i = 0; while (i < keys.length - 1 && keys[i + 1][0] <= t) i++;
     const [ta, ca] = keys[i], nx = keys[i + 1]; if (!nx) return ca;
@@ -165,7 +201,7 @@ export function makeFilm(C, voiceDur = {}) {
   function roundelAt(d, t) {
     const a = d.a; if (t < a.ring[0]) return null;
     const u = eio(seg(t, ...a.travel));
-    const x = lerp(d.f.x, d.slot[0], u), y = lerp(d.f.y, d.slot[1], u) - Math.sin(u * Math.PI) * 30, r = Math.exp(lerp(Math.log(d.f.r), Math.log(RR), u));
+    const x = lerp(d.f.x, d.slot[0], u), y = lerp(d.f.y, d.slot[1], u) - Math.sin(u * Math.PI) * 30 * S, r = Math.exp(lerp(Math.log(d.f.r), Math.log(RR), u));
     return { x, y, r, ring: seg(t, ...a.ring), burn: seg(t, ...a.burn), travel: u };
   }
 
@@ -175,13 +211,13 @@ export function makeFilm(C, voiceDur = {}) {
   function drawLeader(ctx, d, r, t) {
     const f = [d.f.x, d.f.y];
     let wp = null; if (d.wp) { const m = [(f[0] + r.x) / 2, (f[1] + r.y) / 2]; wp = [lerp(m[0], d.wp[0], r.travel), lerp(m[1], d.wp[1], r.travel)]; }
-    const aim = wp || f, dx = aim[0] - r.x, dy = aim[1] - r.y, L = Math.hypot(dx, dy) || 1; if (L < r.r + 6) return;
+    const aim = wp || f, dx = aim[0] - r.x, dy = aim[1] - r.y, L = Math.hypot(dx, dy) || 1; if (L < r.r + 6 * S) return;
     const end = [r.x + dx / L * r.r, r.y + dy / L * r.r];
-    ctx.save(); ctx.strokeStyle = PAL.ink; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = 0.95;
+    ctx.save(); ctx.strokeStyle = PAL.ink; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = 0.95 * S;
     ctx.beginPath(); ctx.moveTo(...f); if (wp) ctx.lineTo(...wp); ctx.lineTo(...end); ctx.stroke();
-    ctx.fillStyle = PAL.ink; ctx.beginPath(); ctx.arc(f[0], f[1], 1.7, 0, 7); ctx.fill(); ctx.restore();
+    ctx.fillStyle = PAL.ink; ctx.beginPath(); ctx.arc(f[0], f[1], 1.7 * S, 0, 7); ctx.fill(); ctx.restore();
     const nxt = wp || end, ddx = nxt[0] - f[0], ddy = nxt[1] - f[1], LL = Math.hypot(ddx, ddy) || 1;
-    engraveText(ctx, String(d.i + 1), f[0] + ddx / LL * 26 + (-ddy / LL) * 11, f[1] + ddy / LL * 26 + (ddx / LL) * 11 + 5, { size: 15, italic: true, p: seg(t, d.a.travel[1] - 0.3, d.a.travel[1] + 0.2) });
+    engraveText(ctx, String(d.i + 1), f[0] + ddx / LL * 26 * S + (-ddy / LL) * 11 * S, f[1] + ddy / LL * 26 * S + (ddx / LL) * 11 * S + 5 * S, { size: 15 * S, italic: true, p: seg(t, d.a.travel[1] - 0.3, d.a.travel[1] + 0.2) });
   }
 
   function drawPaperScene(ctx, t, cam, { noColour = false, pre = null, inkOnly = false } = {}) {
@@ -193,11 +229,11 @@ export function makeFilm(C, voiceDur = {}) {
     if (inkOnly) return;
     // titles
     const tt = T.title;
-    engraveText(ctx, String(C.title || '').toUpperCase() + '.', 960, 132, { size: 50, weight: 600, track: 0.16, p: seg(t, tt, tt + 0.9) });
-    engraveText(ctx, C.latin || '', 960, 170, { size: 24, italic: true, weight: 400, p: seg(t, tt + 0.45, tt + 1.1) });
+    engraveText(ctx, String(C.title || '').toUpperCase() + '.', W / 2, 132 * fy, { size: 50 * S, weight: 600, track: 0.16, p: seg(t, tt, tt + 0.9) });
+    engraveText(ctx, C.latin || '', W / 2, 170 * fy, { size: 24 * S, italic: true, weight: 400, p: seg(t, tt + 0.45, tt + 1.1) });
     const tg = T.gather[0];
-    engraveText(ctx, String(C.plate_no || '').toUpperCase() + '.', BORDER[2] - 16, 116, { size: 22, weight: 600, track: 0.12, align: 'right', p: seg(t, tg + 0.1, tg + 0.6) });
-    engraveText(ctx, String(C.series || '').toUpperCase(), BORDER[0] + 16, 112, { size: 13, weight: 500, track: 0.22, align: 'left', p: seg(t, tg + 0.2, tg + 1.0) });
+    engraveText(ctx, String(C.plate_no || '').toUpperCase() + '.', BORDER[2] - 16 * S, 116 * fy, { size: 22 * S, weight: 600, track: 0.12, align: 'right', p: seg(t, tg + 0.1, tg + 0.6) });
+    engraveText(ctx, String(C.series || '').toUpperCase(), BORDER[0] + 16 * S, 112 * fy, { size: 13 * S, weight: 500, track: 0.22, align: 'left', p: seg(t, tg + 0.2, tg + 1.0) });
     // leaders under the roundels
     for (const d of dets) { const r = roundelAt(d, t); if (r && r.travel > 0) drawLeader(ctx, d, r, t); }
     // roundels
@@ -220,47 +256,49 @@ export function makeFilm(C, voiceDur = {}) {
         d.art.ink.draw(ctx, t, { wScale: Math.max(1, 0.55 / (k * cam.z)) ** 0.6 });
       }
       ctx.restore();
-      roundelFrame(ctx, r.x, r.y, r.r, { p: r.ring, w: 2.0 });
+      roundelFrame(ctx, r.x, r.y, r.r, { p: r.ring, w: 2.0 * S });
       const lx = d.slot[0], ly = d.slot[1] + RR;
       if (t > d.a.name) {
-        engraveText(ctx, d.lab.name, lx, ly + 36, { size: 17, weight: 600, track: 0.14, p: seg(t, d.a.name, d.a.name + 0.6) });
-        engraveText(ctx, d.lab.latin, lx, ly + 64, { size: 20, italic: true, weight: 400, p: seg(t, d.a.latin, d.a.latin + 0.55) });
+        engraveText(ctx, d.lab.name, lx, ly + 36 * S, { size: 17 * S, weight: 600, track: 0.14, p: seg(t, d.a.name, d.a.name + 0.6) });
+        engraveText(ctx, d.lab.latin, lx, ly + 64 * S, { size: 20 * S, italic: true, weight: 400, p: seg(t, d.a.latin, d.a.latin + 0.55) });
         const lines = wrapLines(ctx, d.lab.note, NOTE.width, { size: NOTE.size, font: FONTS.script });
         const np = seg(t, d.a.note, d.a.note + 1.1);
-        lines.forEach((ln, q) => writeScript(ctx, ln, lx, ly + 100 + q * NOTE.size * NOTE.lead, { size: NOTE.size, p: clamp(np * lines.length - q) }));
+        lines.forEach((ln, q) => writeScript(ctx, ln, lx, ly + 100 * S + q * NOTE.size * NOTE.lead, { size: NOTE.size, p: clamp(np * lines.length - q) }));
       }
     });
     // an empty slot shows the specimen at natural size (the plate is ~20 cm wide, the bee ~13 mm long)
     if (natSlot && t > T.gather[0]) {
-      const [sx, sy] = SLOTS[natSlot], k = 0.19, tb = lerp(2.4, 6.9, seg(t, T.gather[0], T.gather[1] - 0.1));
-      ctx.save(); ctx.translate(sx, sy - 6); ctx.scale(k, k); ctx.translate(-960, -606);
+      const [sx, sy] = SLOTS[natSlot], k = 0.19 * S, tb = lerp(2.4, 6.9, seg(t, T.gather[0], T.gather[1] - 0.1));
+      ctx.save(); ctx.translate(sx, sy - 6 * S); ctx.scale(k, k); ctx.translate(-W / 2, -606 * fy);
       if (!noColour) wash.draw(ctx, t);
       ink.draw(ctx, tb, { wScale: 2.1 }); ctx.restore();
-      engraveText(ctx, (C.nat_size_label || 'Natural size').toUpperCase(), sx, sy + 110, { size: 15, weight: 600, track: 0.2, p: seg(t, T.gather[0] + 0.4, T.gather[1]) });
+      engraveText(ctx, (C.nat_size_label || 'Natural size').toUpperCase(), sx, sy + 110 * S, { size: 15 * S, weight: 600, track: 0.2, p: seg(t, T.gather[0] + 0.4, T.gather[1]) });
     }
     // the caption (the call to action) and the engravers' signatures
     const tl = T.landing[0];
-    engraveText(ctx, C.caption || '', 960, 988, { size: 22, italic: true, weight: 500, p: seg(t, tl + 0.05, tl + 0.8) });
+    engraveText(ctx, C.caption || '', W / 2, 988 * fy, { size: 22 * S, italic: true, weight: 500, p: seg(t, tl + 0.05, tl + 0.8) });
     if (C.signature) {
-      engraveText(ctx, C.signature.left || '', BORDER[0] + 4, 1026, { size: 13, italic: true, align: 'left', p: seg(t, tl + 1.0, tl + 1.4) });
-      engraveText(ctx, C.signature.right || '', BORDER[2] - 4, 1026, { size: 13, italic: true, align: 'right', p: seg(t, tl + 1.2, tl + 1.6) });
+      engraveText(ctx, C.signature.left || '', BORDER[0] + 4 * S, 1026 * fy, { size: 13 * S, italic: true, align: 'left', p: seg(t, tl + 1.0, tl + 1.4) });
+      engraveText(ctx, C.signature.right || '', BORDER[2] - 4 * S, 1026 * fy, { size: 13 * S, italic: true, align: 'right', p: seg(t, tl + 1.2, tl + 1.6) });
     }
   }
 
   function screenOf(cam, x, y) { const m = new DOMMatrix().translateSelf(W / 2, H / 2).rotateSelf(cam.rot * 180 / Math.PI).scaleSelf(cam.z, cam.z).translateSelf(-cam.cx, -cam.cy); const p = m.transformPoint(new DOMPoint(x, y)); return [p.x, p.y]; }
   function drawCopperScene(ctx, t, cam) {
     applyCam(ctx, cam);
-    Cu.drawCopper(ctx, [-300, -300, W + 300, H + 300]);
-    Cu.copperLight(ctx, W, H, cam); applyCam(ctx, cam);
+    Cu.drawCopper(ctx, [-300 * S, -300 * S, W + 300 * S, H + 300 * S]);
+    // copperLight measures its parallax from the design centre (960, 540); hand it the camera as if the frame
+    // were still the design frame, so the reflection slides with the camera on any shape of plate.
+    Cu.copperLight(ctx, W, H, { ...cam, cx: cam.cx + (960 - W / 2), cy: cam.cy + (540 - H / 2) }); applyCam(ctx, cam);
     guide.draw(ctx, Infinity, { color: 'rgba(255,226,196,0.4)', wScale: 0.3, dx: -0.25, dy: -0.25 });
     guide.draw(ctx, Infinity, { color: 'rgba(60,24,8,0.25)', wScale: 0.2, dx: 0.2, dy: 0.2 });
     Cu.drawGrooves(ctx, ink, Math.min(t, T.lift + 0.001), { zoom: cam.z });
     const tp = tipAt(Math.min(t, T.lift)), sp = screenOf(cam, tp.x, tp.y), dv = [tp.dx * Math.cos(cam.rot) - tp.dy * Math.sin(cam.rot), tp.dx * Math.sin(cam.rot) + tp.dy * Math.cos(cam.rot)];
     const lift = ss(seg(t, T.lift, T.lift + 0.35));
-    const cut = (Math.min(t, T.lift) + 1.6) * 150;
+    const cut = (Math.min(t, T.lift) + 1.6) * 150 * S;
     ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
-    Cu.drawSwarf(ctx, sp, dv, cut, { s: 1.25 });
-    Cu.drawBurin(ctx, sp, dv, { s: 1.1, lift });
+    Cu.drawSwarf(ctx, sp, dv, cut, { s: 1.25 * S });
+    Cu.drawBurin(ctx, sp, dv, { s: 1.1 * S, lift });
     ctx.restore();
   }
 
@@ -268,32 +306,32 @@ export function makeFilm(C, voiceDur = {}) {
     const sb = subs.find(x => t >= x.t0 && t < x.t1); if (!sb) return;
     const a = Math.min(seg(t, sb.t0, sb.t0 + 0.25), 1 - seg(t, sb.t1 - 0.2, sb.t1));
     ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
-    const size = 38, lines = wrapLines(ctx, sb.text, 860, { size, font: FONTS.script });
-    const lh = size * 1.12, hgt = lines.length * lh + 24, wid = Math.max(...lines.map(l => measure(ctx, l, { size, font: FONTS.script, weight: 400 }).tw)) + 70;
-    const y1 = 1058, y0 = y1 - hgt, x0 = 960 - wid / 2;
+    const size = 38 * S, lines = wrapLines(ctx, sb.text, 860 * S, { size, font: FONTS.script });
+    const lh = size * 1.12, hgt = lines.length * lh + 24 * S, wid = Math.max(...lines.map(l => measure(ctx, l, { size, font: FONTS.script, weight: 400 }).tw)) + 70 * S;
+    const y1 = 1058 * fy, y0 = y1 - hgt, x0 = W / 2 - wid / 2;
     ctx.globalAlpha = a;
-    ctx.shadowColor = 'rgba(60,40,20,0.28)'; ctx.shadowBlur = 14; ctx.shadowOffsetY = 4;
+    ctx.shadowColor = 'rgba(60,40,20,0.28)'; ctx.shadowBlur = 14 * S; ctx.shadowOffsetY = 4 * S;
     ctx.fillStyle = '#f4eddb'; ctx.beginPath();
-    const R = B.RNG(7); ctx.moveTo(x0, y0); for (let x = x0; x <= x0 + wid; x += 14) ctx.lineTo(x, y0 + (R() - 0.5) * 2.2); for (let y = y0; y <= y1; y += 12) ctx.lineTo(x0 + wid + (R() - 0.5) * 2, y); for (let x = x0 + wid; x >= x0; x -= 14) ctx.lineTo(x, y1 + (R() - 0.5) * 2.2); for (let y = y1; y >= y0; y -= 12) ctx.lineTo(x0 + (R() - 0.5) * 2, y); ctx.closePath(); ctx.fill();
+    const R = B.RNG(7); ctx.moveTo(x0, y0); for (let x = x0; x <= x0 + wid; x += 14 * S) ctx.lineTo(x, y0 + (R() - 0.5) * 2.2 * S); for (let y = y0; y <= y1; y += 12 * S) ctx.lineTo(x0 + wid + (R() - 0.5) * 2 * S, y); for (let x = x0 + wid; x >= x0; x -= 14 * S) ctx.lineTo(x, y1 + (R() - 0.5) * 2.2 * S); for (let y = y1; y >= y0; y -= 12 * S) ctx.lineTo(x0 + (R() - 0.5) * 2 * S, y); ctx.closePath(); ctx.fill();
     ctx.shadowColor = 'transparent';
-    lines.forEach((ln, i) => writeScript(ctx, ln, 960, y0 + 12 + lh * (i + 0.8), { size, color: '#2b1e14', p: 1, alpha: a }));
+    lines.forEach((ln, i) => writeScript(ctx, ln, W / 2, y0 + 12 * S + lh * (i + 0.8), { size, color: '#2b1e14', p: 1, alpha: a }));
     ctx.restore();
   }
 
   function drawEnd(ctx, t) {
     const p = seg(t, T.end[0], T.end[0] + 0.7); if (p <= 0) return;
-    const y = lerp(-H - 40, 0, eo(p));
+    const y = lerp(-H - 40 * S, 0, eo(p));
     ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.translate(0, y);
     // tissue guard: translucent, faintly creased, falling over the plate
-    ctx.fillStyle = 'rgba(246,241,229,0.9)'; ctx.fillRect(0, 0, W, H + 40);
+    ctx.fillStyle = 'rgba(246,241,229,0.9)'; ctx.fillRect(0, 0, W, H + 40 * S);
     ctx.globalCompositeOperation = 'multiply'; ctx.globalAlpha = 0.25; ctx.drawImage(paperTexture(W, H), 0, 0, W, H); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
-    const g = ctx.createLinearGradient(0, H - 40, 0, H + 40); g.addColorStop(0, 'rgba(120,100,70,0)'); g.addColorStop(1, 'rgba(120,100,70,0.25)'); ctx.fillStyle = g; ctx.fillRect(0, H - 40, W, 80);
+    const g = ctx.createLinearGradient(0, H - 40 * S, 0, H + 40 * S); g.addColorStop(0, 'rgba(120,100,70,0)'); g.addColorStop(1, 'rgba(120,100,70,0.25)'); ctx.fillStyle = g; ctx.fillRect(0, H - 40 * S, W, 80 * S);
     const e0 = T.end[0] + 0.3, E = C.end || {}, q = (a, b) => seg(t, e0 + a, e0 + b);
-    engraveText(ctx, String(E.film_title || C.title || '').toUpperCase(), 960, 420, { size: 46, weight: 600, track: 0.14, p: q(0, 0.5) });
-    engraveText(ctx, E.style_name || 'Copperplate Engraving', 960, 478, { size: 27, italic: true, p: q(0.05, 0.45) });
-    engraveText(ctx, 'LEMO-OPUSCAR', 960, 580, { size: 20, weight: 600, track: 0.3, p: q(0.1, 0.45) });
-    engraveText(ctx, 'LemoLab × Claude Opus 5.5', 960, 622, { size: 23, italic: true, p: q(0.1, 0.45) });
-    (E.credits || []).forEach((c, i) => engraveText(ctx, c, 960, 720 + i * 30, { size: 17, weight: 500, track: 0.04, p: q(0.15, 0.5) }));
+    engraveText(ctx, String(E.film_title || C.title || '').toUpperCase(), W / 2, 420 * fy, { size: 46 * S, weight: 600, track: 0.14, p: q(0, 0.5) });
+    engraveText(ctx, E.style_name || 'Copperplate Engraving', W / 2, 478 * fy, { size: 27 * S, italic: true, p: q(0.05, 0.45) });
+    engraveText(ctx, 'LEMO-OPUSCAR', W / 2, 580 * fy, { size: 20 * S, weight: 600, track: 0.3, p: q(0.1, 0.45) });
+    engraveText(ctx, 'LemoLab × Claude Opus 5.5', W / 2, 622 * fy, { size: 23 * S, italic: true, p: q(0.1, 0.45) });
+    (E.credits || []).forEach((c, i) => engraveText(ctx, c, W / 2, 720 * fy + i * 30 * S, { size: 17 * S, weight: 500, track: 0.04, p: q(0.15, 0.5) }));
     ctx.restore();
   }
 
@@ -313,11 +351,13 @@ export function makeFilm(C, voiceDur = {}) {
   // the proof is pulled: the sheet peels back across the frame. Behind the fold, the printed face; ahead of it, the copper;
   // on the fold, the curling sheet shows its back with the print showing through, mirrored.
   function drawPeel(ctx, t, cam) {
-    const u = ss(seg(t, ...T.peel)) * 0.7 + seg(t, ...T.peel) * 0.3, dir = [0.8, 0.6], span = 2700, off = lerp(-span / 2 - 260, span / 2 + 260, u);
-    const c = [W / 2 - dir[0] * off, H / 2 - dir[1] * off], n = [-dir[1], dir[0]], fw = 380;
-    const band = (d0, d1) => { const A = [c[0] + dir[0] * d0, c[1] + dir[1] * d0], Bp = [c[0] + dir[0] * d1, c[1] + dir[1] * d1]; ctx.beginPath(); ctx.moveTo(A[0] + n[0] * 3000, A[1] + n[1] * 3000); ctx.lineTo(A[0] - n[0] * 3000, A[1] - n[1] * 3000); ctx.lineTo(Bp[0] - n[0] * 3000, Bp[1] - n[1] * 3000); ctx.lineTo(Bp[0] + n[0] * 3000, Bp[1] + n[1] * 3000); ctx.closePath(); };
+    // the fold sweeps the whole frame, so its travel and the band's over-length follow the frame's own size
+    const BL = Math.max(fx, fy), span = 2700 * (Math.hypot(W, H) / Math.hypot(NATIVE.W, NATIVE.H));
+    const u = ss(seg(t, ...T.peel)) * 0.7 + seg(t, ...T.peel) * 0.3, dir = [0.8, 0.6], off = lerp(-span / 2 - 260 * BL, span / 2 + 260 * BL, u);
+    const c = [W / 2 - dir[0] * off, H / 2 - dir[1] * off], n = [-dir[1], dir[0]], fw = 380 * S;
+    const band = (d0, d1) => { const A = [c[0] + dir[0] * d0, c[1] + dir[1] * d0], Bp = [c[0] + dir[0] * d1, c[1] + dir[1] * d1]; ctx.beginPath(); ctx.moveTo(A[0] + n[0] * 3000 * BL, A[1] + n[1] * 3000 * BL); ctx.lineTo(A[0] - n[0] * 3000 * BL, A[1] - n[1] * 3000 * BL); ctx.lineTo(Bp[0] - n[0] * 3000 * BL, Bp[1] - n[1] * 3000 * BL); ctx.lineTo(Bp[0] + n[0] * 3000 * BL, Bp[1] + n[1] * 3000 * BL); ctx.closePath(); };
     drawCopperScene(ctx, t, cam);
-    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); band(0, 4000); ctx.clip(); drawPaperScene(ctx, t, cam, { noColour: true }); ctx.restore();
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); band(0, 4000 * BL); ctx.clip(); drawPaperScene(ctx, t, cam, { noColour: true }); ctx.restore();
     // shadow of the lifted sheet on the copper
     ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); band(-fw * 0.9, -fw * 2.2); ctx.clip();
     const sg = ctx.createLinearGradient(c[0] - dir[0] * fw * 0.9, c[1] - dir[1] * fw * 0.9, c[0] - dir[0] * fw * 2.2, c[1] - dir[1] * fw * 2.2); sg.addColorStop(0, 'rgba(30,10,2,0.6)'); sg.addColorStop(1, 'rgba(30,10,2,0)'); ctx.fillStyle = sg; ctx.fillRect(0, 0, W, H); ctx.restore();

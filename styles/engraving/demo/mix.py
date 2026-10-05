@@ -9,7 +9,12 @@ from core.audio.sfx import SR, add, bp, lp, hp, noise, brown, env_exp, t_, limit
 HERE = os.path.dirname(os.path.abspath(__file__))
 WORK = os.environ.get('ENG_WORK') or HERE     # ENG_WORK: work folder with events.json, voices/, music/stems (alt content)
 E = json.load(open(os.path.join(WORK, 'events.json'))); DUR = E['dur']; EV = E['ev']
-N = int(DUR * SR)
+# ★ 必须 int(round(...))，不能 int(...)。core/audio/sfx.py 的 t_()/noise() 都用 round 取整
+#   （那里已注明「避免长度差 1 相乘报错」），这里若用截断就会差 1 个采样：
+#   实测 DUR=44.470 时 44.470*48000 在浮点下是 2134559.9999…，int() 得 2134559、
+#   noise()/brown() 得 2134560 → `rt * envr` 直接 broadcast 报错，整条音频链路 STEP_FAIL。
+#   换配音音色就会改变 DUR，从而把这类「只在某些 DUR 下才炸」的 bug 翻出来。
+N = int(round(DUR * SR))
 rng = np.random.default_rng(53)
 room, foley, voice = np.zeros((N, 2)), np.zeros((N, 2)), np.zeros((N, 2))
 first = lambda typ: next(e for e in EV if e['type'] == typ)
@@ -62,7 +67,7 @@ for c in np.cumsum(rng.exponential(0.006, 400)):
     k = int(c * SR); L = min(len(crack) - k, 200); crack[k:k + L] += rng.standard_normal(L) * np.exp(-np.arange(L) / 40) * rng.uniform(0.2, 1)
 crack = bp(crack, 900, 7000) * np.sin(np.pi * np.linspace(0, 1, len(crack))) ** 0.6
 add(foley, norm(crack, 1) * 0.16, peel + 0.02, 1.0, -0.2)
-add(foley, fade(bp(noise(0.6), 300, 2500)) * np.sin(np.pi * np.linspace(0, 1, int(0.6 * SR))) * 0.05, peel + 0.1, 1.0, -0.5)
+add(foley, fade(bp(noise(0.6), 300, 2500)) * np.sin(np.pi * np.linspace(0, 1, int(round(0.6 * SR)))) * 0.05, peel + 0.1, 1.0, -0.5)
 # the burin's hiss tails into the paper (L-cut): a soft echo of the scrape under the first printed line
 add(foley, sc[-int(0.5 * SR):] * np.linspace(0.6, 0, int(0.5 * SR)), peel + 0.05, 0.5, 0.15)
 
@@ -97,7 +102,7 @@ def whoosh(d, lo, hi, gain):
 for e in allof('push'): add(foley, whoosh(0.9, 150, 900, 0.05), e['t'], 1.0, 0)
 for e in allof('ring'):                                                         # the burin scribing a circle
     d = 0.4; x = bp(noise(d), 3500, 9000) * (0.6 + 0.4 * np.sin(2 * np.pi * 9 * t_(d))); add(foley, fade(x) * 0.06, e['t'], 1.0, 0.1)
-for e in allof('burnish'): add(foley, fade(lp(brown(0.3), 900)) * np.sin(np.pi * np.linspace(0, 1, int(0.3 * SR))) * 0.05, e['t'], 1.0, 0)
+for e in allof('burnish'): add(foley, fade(lp(brown(0.3), 900)) * np.sin(np.pi * np.linspace(0, 1, int(round(0.3 * SR)))) * 0.05, e['t'], 1.0, 0)
 for e in allof('cut'): add(foley, scratches(e['t'], e['until'], 140, 0.05, lo=4000, seed=10 + e['i']), e['t'], 1.0, [-.4, -.4, .4, .4][e['i']])
 for e in allof('travel'): add(foley, whoosh(e['until'] - e['t'], 400, 3000, 0.035), e['t'], 1.0, 0)
 for e in allof('land'):
@@ -114,7 +119,7 @@ for i, e in enumerate(allof('drop')):
     d = 0.22; tt = t_(d); f = 1500 * np.exp(-tt * 9) + 520
     plip = np.sin(2 * np.pi * np.cumsum(f) / SR) * env_exp(d, 0.035) * (0.22 if i == 0 else 0.07)
     add(foley, plip + hp(noise(d), 4000) * env_exp(d, 0.003) * 0.05, e['t'], 1.0, pans.get(e['region'], 0))
-    w = bp(noise(0.8), 500, 4000) * np.sin(np.pi * np.linspace(0, 1, int(0.8 * SR))) ** 2
+    w = bp(noise(0.8), 500, 4000) * np.sin(np.pi * np.linspace(0, 1, int(round(0.8 * SR)))) ** 2
     add(foley, w * (0.028 if i else 0.04), e['t'] + 0.05, 1.0, pans.get(e['region'], 0))
 lnd = first('landing')
 for e in allof('dot'): add(foley, hp(noise(0.01), 2000) * env_exp(0.01, 0.002) * 0.08, e['t'], 1.0, 0)

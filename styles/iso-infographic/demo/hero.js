@@ -1,6 +1,6 @@
 // Hero close-ups in the flat infographic language: the palm (opening and ending, identical pose), the picking fingers,
 // the coffee branch and the cup. All drawn in world units (billboards) with origin = where the object rests on the palm.
-import { PAL, tri, hex, mix, TAU, clamp, lerp, seg, ss, eo } from './engine.js';
+import { PAL, tri, hex, mix, TAU, clamp, lerp, seg, ss, eo, S as FS } from './engine.js';
 
 const poly = (g, pts, c) => { g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath(); g.fillStyle = c; g.fill(); };
 const cap = (g, x0, y0, x1, y1, w, c) => { g.strokeStyle = c; g.lineWidth = w; g.lineCap = 'round'; g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke(); };
@@ -99,11 +99,12 @@ export function cup(g, t, o = {}) {
   if (o.steam !== false) { g.save(); g.strokeStyle = C('rgba(46,37,34,.45)'); g.lineWidth = .016; g.lineCap = 'round'; for (let i = 0; i < 3; i++) { const x0 = (i - 1) * .09, ph = t * 1.6 + i * 2.1; g.globalAlpha = .5 + .4 * Math.sin(t * 1.3 + i); g.beginPath(); for (let k = 0; k <= 20; k++) { const q = k / 20, yy = y0 - h - .08 - q * .38, xx = x0 + Math.sin(q * 6 + ph) * .03 * (1 + q); k ? g.lineTo(xx, yy) : g.moveTo(xx, yy); } g.stroke(); } g.restore(); }
 }
 // the "0 km / 11,000 km" tag: dot on the object → leader up-right → text. Same pixel geometry both times.
+// 这是**屏幕空间**的家什（调用点在 g.restore() 之后，坐标为当前帧）→ 所有像素量乘 FS（=engine 的 S）。
 export function kmTag(g, x, y, text, a, ink = PAL.ink) {
-  if (a <= 0) return; g.save(); g.globalAlpha = a; g.strokeStyle = ink; g.lineWidth = 2.5; g.lineCap = 'round';
+  if (a <= 0) return; g.save(); g.globalAlpha = a; g.strokeStyle = ink; g.lineWidth = 2.5 * FS; g.lineCap = 'round';
   const s1 = eo(seg(a, 0, .4)), s2 = eo(seg(a, .3, .7));
-  g.beginPath(); g.arc(x, y, 7, 0, TAU); g.fillStyle = PAL.paper; g.fill(); g.stroke(); g.beginPath(); g.arc(x, y, 3, 0, TAU); g.fillStyle = ink; g.fill();
-  g.beginPath(); g.moveTo(x, y); g.lineTo(x + 170 * s1, y - 170 * s1); if (s2 > 0) g.lineTo(x + 170 + 330 * s2, y - 170); g.stroke();
-  if (s2 > 0) { g.save(); g.beginPath(); g.rect(x + 170, y - 290, 700 * ss(seg(a, .5, 1)), 200); g.clip(); g.font = `400 84px Jost`; g.lineJoin = 'round'; g.strokeStyle = 'rgba(251,244,230,.95)'; g.lineWidth = 10; g.strokeText(text, x + 186, y - 190); g.fillStyle = ink; g.fillText(text, x + 186, y - 190); g.restore(); }
+  g.beginPath(); g.arc(x, y, 7 * FS, 0, TAU); g.fillStyle = PAL.paper; g.fill(); g.stroke(); g.beginPath(); g.arc(x, y, 3 * FS, 0, TAU); g.fillStyle = ink; g.fill();
+  g.beginPath(); g.moveTo(x, y); g.lineTo(x + 170 * FS * s1, y - 170 * FS * s1); if (s2 > 0) g.lineTo(x + 170 * FS + 330 * FS * s2, y - 170 * FS); g.stroke();
+  if (s2 > 0) { g.save(); g.beginPath(); g.rect(x + 170 * FS, y - 290 * FS, 700 * FS * ss(seg(a, .5, 1)), 200 * FS); g.clip(); g.font = `400 ${84 * FS}px Jost`; g.lineJoin = 'round'; g.strokeStyle = 'rgba(251,244,230,.95)'; g.lineWidth = 10 * FS; g.strokeText(text, x + 186 * FS, y - 190 * FS); g.fillStyle = ink; g.fillText(text, x + 186 * FS, y - 190 * FS); g.restore(); }
   g.restore();
 }

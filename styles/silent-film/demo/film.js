@@ -8,10 +8,19 @@ import { intertitle, iris, theatre } from './engine/cards.js';
 import { setFrame, S as IS } from './engine/ink.js';
 import { SEC, DUR as D, HIT, secAt } from './timeline.js';
 import { CARDS } from './cardspecs.js';
+import { W, H, GATE, S, FW, FH } from './stage.js';   // 舞台的当前帧（stage.setFrame() 定的活绑定）
 import * as SH from './shots.js';
 
+// 影片元数据：aspects 是**字面量**（lib/aspects.mjs 按文本正则探测，不写 = 只支持 16:9）。
+// 已适配多比例：影院随帧铺满、4:3 片门按紧轴等比装入居中 —— 见 main.js 的 stage.setFrame() 与 stage.js 的 GATE。
+export const FILM_META = {
+  id: 'the-runaway-loaf',
+  title: 'The Runaway Loaf',
+  style: 'Silent Film',
+  aspects: ['16:9', '9:16'],
+};
+
 export const DUR = D;
-const W = 1920, H = 1080, FW = 1440, FH = 1080, GATE = { x: 240, y: 0, w: FW, h: FH };
 const fc = document.createElement('canvas'); fc.width = FW; fc.height = FH; const fg = fc.getContext('2d');
 let RD = null, FP = null;
 const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
@@ -60,9 +69,9 @@ export function renderFilm(g, t, Q) {
   // curtains: part at the start, close at the end
   const curtain = t < HIT.title ? ss((t - HIT.curtain) / 1.1) : 1 - ss((t - HIT.curtainOut) / 1.1);
   theatre(g, W, H, GATE, Math.max(.3, FP.mean * (sec.name === 'PRE' ? exposure : 1)), curtain);
-  g.save(); g.beginPath(); g.roundRect(GATE.x, GATE.y, GATE.w, GATE.h, 22); g.clip();
-  g.drawImage(dev, GATE.x, GATE.y);
-  damage(g, GATE.x, GATE.y, FW, FH, frame, look.str);
+  g.save(); g.beginPath(); g.roundRect(GATE.x, GATE.y, GATE.w, GATE.h, 22 * S); g.clip();
+  g.drawImage(dev, GATE.x, GATE.y, GATE.w, GATE.h);           // 1440×1080 的印片按 S 缩放进片门（16:9 时 1:1）
+  damage(g, GATE.x, GATE.y, GATE.w, GATE.h, frame, look.str, { s: S });
   g.restore();
   // curtains are in front of the screen: redraw them over the image when they are (partly) closed
   if (curtain < 1) curtainsOver(g, curtain, Math.max(.55, FP.mean));   // footlights keep the closed velvet visible
@@ -70,6 +79,7 @@ export function renderFilm(g, t, Q) {
 
 function curtainsOver(g, open, spill) {
   // velvet drapes sliding in from both sides over the screen (theatre() only paints the side masking)
+  // 幕布是**当前帧**的家什：铺满整帧（位置随 W/H 走），光池/影边等尺寸 ×S。
   const cover = (1 - open) * (W / 2 + 10);
   if (cover < 1) return;
   const c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
@@ -77,14 +87,15 @@ function curtainsOver(g, open, spill) {
   g.save();
   g.drawImage(c, 0, 0, W / 2, H, cover - W / 2, 0, W / 2, H);          // left drape slides in
   g.drawImage(c, W / 2, 0, W / 2, H, W - cover, 0, W / 2, H);          // right drape slides in
-  // footlights: warm light washing up the velvet from the stage edge
+  // footlights: warm light washing up the velvet from the stage edge（半径随画面**对角线**走：16:9 与 9:16 对角线相同）
+  const dg = Math.hypot(W, H) / Math.hypot(1920, 1080);
   g.save(); g.beginPath(); g.rect(0, 0, cover, H); g.rect(W - cover, 0, cover, H); g.clip();
   g.globalCompositeOperation = 'screen';
-  const fl = g.createRadialGradient(W / 2, H + 120, 60, W / 2, H + 120, 1250);
+  const fl = g.createRadialGradient(W / 2, H + 120 * dg, 60 * dg, W / 2, H + 120 * dg, 1250 * dg);
   fl.addColorStop(0, 'rgba(255,170,110,.42)'); fl.addColorStop(.55, 'rgba(170,70,50,.16)'); fl.addColorStop(1, 'rgba(0,0,0,0)');
   g.fillStyle = fl; g.fillRect(0, 0, W, H); g.restore();
   // a soft shadow at each leading edge
-  for (const [x0, dir] of [[cover, -1], [W - cover, 1]]) { const gr = g.createLinearGradient(x0, 0, x0 + dir * 60, 0); gr.addColorStop(0, 'rgba(0,0,0,.55)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(Math.min(x0, x0 + dir * 60), 0, 60, H); }
+  for (const [x0, dir] of [[cover, -1], [W - cover, 1]]) { const gr = g.createLinearGradient(x0, 0, x0 + dir * 60 * S, 0); gr.addColorStop(0, 'rgba(0,0,0,.55)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(Math.min(x0, x0 + dir * 60 * S), 0, 60 * S, H); }
   g.restore();
 }
 

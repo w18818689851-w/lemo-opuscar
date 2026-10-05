@@ -3,26 +3,29 @@
 import { mulberry, hash } from '/core/lib.js';
 import { Pass } from './glass.js';
 import { FLOOR, LW, LX, BOT, APEX, ROSE, drawStone, drawTracery, drawLancet, drawRose, lancetPath, LTINT } from './window.js';
+import { W, H } from './film.js';
 
 const PMW = 1024, PMH = 768;
-export function camMatrix(cam) { return new DOMMatrix().translate(960, 540).scale(cam[2]).translate(-cam[0], -cam[1]); }
+// 相机：设计帧中心 (960,540) → 当前帧中心 (W/2,H/2)；zoom 不含 S（世界按原比例居中，不拉伸）。
+// 1920×1080 时 W/2 = 960、H/2 = 540 ⇒ 与改造前逐字节相同。
+export function camMatrix(cam) { return new DOMMatrix().translate(W / 2, H / 2).scale(cam[2]).translate(-cam[0], -cam[1]); }
 
 // lit fraction of each lancet under the moving sun band
 export function lancetLit(st) {
   const W = st.bandW ?? 310;
   return LX.map(cx => { const a = Math.max(cx - LW / 2, st.sunU - W / 2), b = Math.min(cx + LW / 2, st.sunU + W / 2); return Math.max(0, b - a) / LW; });
 }
-// perspective projection of a room point (X along wall, H height above floor, Z out from wall) to screen
-export function proj3(cam, fl, X, H, Z) {
-  const s = cam[2], dist = fl.camD - Z, yb = (FLOOR - cam[1]) * s + 540, y0 = yb - s * fl.eyeH;
-  return [960 + (X - cam[0]) * s * fl.camD / dist, y0 + s * fl.camD * (fl.eyeH - H) / dist];
+// perspective projection of a room point (X along wall, Hh height above floor, Z out from wall) to screen
+export function proj3(cam, fl, X, Hh, Z) {
+  const s = cam[2], dist = fl.camD - Z, yb = (FLOOR - cam[1]) * s + H / 2, y0 = yb - s * fl.eyeH;
+  return [W / 2 + (X - cam[0]) * s * fl.camD / dist, y0 + s * fl.camD * (fl.eyeH - Hh) / dist];
 }
 
 export function renderScene(Lc, L, comp, st) {
   const { G, S, R, O, P } = Lc;
-  for (const c of [G, S, R, O]) { c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, 1920, 1080); }
+  for (const c of [G, S, R, O]) { c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, W, H); }
   const cam = st.cam, M = camMatrix(cam);
-  const hw = 960 / cam[2], hh = 540 / cam[2], view = [cam[0] - hw, cam[1] - hh, cam[0] + hw, cam[1] + hh];
+  const hw = W / 2 / cam[2], hh = H / 2 / cam[2], view = [cam[0] - hw, cam[1] - hh, cam[0] + hw, cam[1] + hh];
   const top = st.floorMode === 2;
   const lit = lancetLit(st).map(v => v * (st.sunI > 0 ? 1 : 0));
   if (!top) {

@@ -1,5 +1,5 @@
 // 剪纸字：用 opentype.js 取 OFL 字体轮廓 → 折线化 → 每个字母"重新剪一遍"（毛边、微旋转、微错位）
-import { rough, piece, pathPoly, S, g } from './paper.js';
+import { rough, piece, pathPoly, ST, g } from './paper.js';
 import { hash } from '/core/lib.js';
 
 const FONTS = {};

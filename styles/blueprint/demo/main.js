@@ -4,6 +4,10 @@ import { renderFilm, DUR, EV, setLines, subs } from './film.js';
 import { drawMachine, drawGarden, flower, explodePaths, G, X, M, gearAngles } from './machine.js';
 import { SW, SH, border, header, titleBlock, partsList, notes, revCloud, revImprint, handShadow, stamp, makeDrops, rain } from './sheet.js';
 const out = document.getElementById('c');
+// 输出尺寸 = 视口尺寸（渲染器截的是浏览器**视口**，不是 canvas）：画布必须跟视口走，否则 `--size/--ratio`
+// 只会把 1920×1080 的画面裁掉一块。ink/fx/ov 仍是设计帧 1920×1080，由 paper.js 的着色器按 fitS 等比装入当前帧。
+out.width = window.innerWidth || W; out.height = window.innerHeight || H;
+out.style.width = out.width + 'px'; out.style.height = out.height + 'px';
 const comp = makePaper(out, W, H);
 const Q = new URLSearchParams(location.search);
 await Promise.all(['400 40px Architects', '400 40px B612', '700 40px B612', '400 40px B612Mono', '400 40px Allura'].map(s => document.fonts.load(s)));

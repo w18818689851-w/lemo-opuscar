@@ -1,5 +1,8 @@
 // The diorama: one square board (S = 240 units) seen in true isometric. Story geometry lives here; drawing via engine.js only.
-import { PAL, tri, mix, hex, hash, clamp, lerp, seg, ss, eo, back, TAU, C30, S30, person, ICON, hatch } from './engine.js';
+// ★ 本模块的 `S` 是棋盘边长（240），与 engine 的缩放因子同名 → 把缩放因子以 `S as FS` 引入
+//   （见 MAINTAINING.md「让影片支持多比例」陷阱一）。世界几何随相机 k 走（k 已含 S），只有
+//   **屏幕像素量**（线宽下限、点阵半径下限、可视阈值、排线步长、屏幕外扩边距）才乘 FS。
+import { PAL, tri, mix, hex, hash, clamp, lerp, seg, ss, eo, back, TAU, C30, S30, person, ICON, hatch, S as FS } from './engine.js';
 
 export const S = 240, ZL = 0, ZW = -1.2, ZB = -7, ZBOT = -11;   // land top, water surface, sea bed, slab bottom
 // ---- coasts (hand-drawn polygons, world XY) ----
@@ -91,7 +94,7 @@ export function drawBoard(iso) {
   iso.add(-1e6, () => {
     // soft shadow on the background
     const c = [[0, 0, ZBOT], [S, 0, ZBOT], [S, S, ZBOT], [0, S, ZBOT]].map(p => iso.P(p[0] + 6, p[1] + 6, p[2] - 3));
-    g.save(); g.filter = `blur(${Math.max(2, iso.cam.k * 4)}px)`; iso.poly(c, 'rgba(120,92,60,0.25)'); g.restore();
+    g.save(); g.filter = `blur(${Math.max(2 * FS, iso.cam.k * 4)}px)`; iso.poly(c, 'rgba(120,92,60,0.25)'); g.restore();
     // right front face (x = S) and left front face (y = S)
     const face = (axis) => {
       const N = 120, top = [], L = [];
@@ -124,13 +127,13 @@ export function drawGround(iso, t) {
   }, 0);
   // waves: little light arcs drifting on the water
   iso.add(-8.9e5, () => {
-    const g = iso.g, k = iso.cam.k; if (k < 2.5) return;
-    g.save(); g.strokeStyle = iso.col('#CFE3F0', .75); g.lineWidth = Math.max(1, k * .12); g.lineCap = 'round';
+    const g = iso.g, k = iso.cam.k; if (k < 2.5 * FS) return;
+    g.save(); g.strokeStyle = iso.col('#CFE3F0', .75); g.lineWidth = Math.max(1 * FS, k * .12); g.lineCap = 'round';
     for (let i = 0; i < 420; i++) {
       const x = hash(i * 1.37) * S, y = hash(i * 2.91 + 4) * S; if (!inPoly(x, y, SEA)) continue;
       const ph = (t * .35 + hash(i * 5.3)) % 1, al = Math.sin(ph * Math.PI);
       const dx = (t * .6) % 3; const [sx, sy] = iso.P(x + dx * .3, y - dx * .3, ZW); const w = 1.4 * k;
-      if (sx < -50 || sx > iso.W + 50 || sy < -50 || sy > iso.H + 50) continue;
+      if (sx < -50 * FS || sx > iso.W + 50 * FS || sy < -50 * FS || sy > iso.H + 50 * FS) continue;
       g.globalAlpha = al * .9; g.beginPath(); g.moveTo(sx - w, sy); g.quadraticCurveTo(sx - w * .5, sy - w * .35, sx, sy); g.quadraticCurveTo(sx + w * .5, sy - w * .35, sx + w, sy); g.stroke();
     }
     g.restore();
@@ -144,7 +147,7 @@ export function road(iso, pts, w, c, line, dashed) {
     const g = iso.g, k = iso.cam.k; g.save(); g.lineJoin = 'round'; g.lineCap = 'round';
     g.beginPath(); pts.forEach((p, i) => { const s = iso.P(p[0], p[1], ZL + .02); i ? g.lineTo(s[0], s[1]) : g.moveTo(s[0], s[1]); });
     g.strokeStyle = iso.col(c); g.lineWidth = w * k * 1.05; g.stroke();
-    if (dashed) { g.setLineDash([k * 1.2, k * 1.2]); g.strokeStyle = iso.col(line, .9); g.lineWidth = Math.max(1, k * .18); g.stroke(); }
+    if (dashed) { g.setLineDash([k * 1.2, k * 1.2]); g.strokeStyle = iso.col(line, .9); g.lineWidth = Math.max(1 * FS, k * .18); g.stroke(); }
     g.restore();
   }, 0);
 }
@@ -166,9 +169,9 @@ export function drawMountain(iso, t, st = {}) {
   }, 1);
 }
 export function shrub(iso, x, y, z, t, st = {}) {
-  const k = iso.cam.k; if (k > 120 || !iso.vis(x, y, z, 2)) return;
+  const k = iso.cam.k; if (k > 120 * FS || !iso.vis(x, y, z, 2)) return;
   iso.sphereNow(x, y, z + .75, .95, ['#86B266', '#5E8C4A', '#436B34'], { hi: false });
-  if (k > 7) { for (let i = 0; i < 4; i++) { const a = hash(x * 3 + y * 7 + i) * TAU; iso.sphereNow(x + Math.cos(a) * .55, y + Math.sin(a) * .55, z + .55 + hash(i + x) * .5, .17, st.ripe === false ? PAL.green : PAL.red, { hi: false }); } }
+  if (k > 7 * FS) { for (let i = 0; i < 4; i++) { const a = hash(x * 3 + y * 7 + i) * TAU; iso.sphereNow(x + Math.cos(a) * .55, y + Math.sin(a) * .55, z + .55 + hash(i + x) * .5, .17, st.ripe === false ? PAL.green : PAL.red, { hi: false }); } }
 }
 export function tree(iso, T) {
   const { x, y, h, r } = T;
@@ -192,7 +195,7 @@ export function drawBeds(iso, t, st = {}) {
     iso.box(x - .2, y - .2, B.h, B.w + .4, B.d + .4, .35, tri('#C9A574'), {
       decal: (I) => { // cherries on the mesh
         const k = iso.cam.k; const top = [[x, y], [x + B.w, y], [x + B.w, y + B.d], [x, y + B.d]].map(q => I.L(q[0], q[1], B.h + .36)); I.poly(top, col);
-        if (k > 9) { const g = I.g; g.save(); for (let j = 0; j < 90; j++) { const qx = x + hash(j * 1.3 + i * 9) * B.w, qy = y + hash(j * 2.7 + i * 5) * B.d, ph = (st.rake ?? 0) * 3 + j; const [sx, sy] = I.L(qx + Math.sin(ph) * .15 * (st.rakeAmp || 0), qy, B.h + .38); g.beginPath(); g.arc(sx, sy, .17 * k, 0, TAU); g.fillStyle = I.col(hex(mix(col, '#FFE9D0', .18))); g.fill(); } g.restore(); }
+        if (k > 9 * FS) { const g = I.g; g.save(); for (let j = 0; j < 90; j++) { const qx = x + hash(j * 1.3 + i * 9) * B.w, qy = y + hash(j * 2.7 + i * 5) * B.d, ph = (st.rake ?? 0) * 3 + j; const [sx, sy] = I.L(qx + Math.sin(ph) * .15 * (st.rakeAmp || 0), qy, B.h + .38); g.beginPath(); g.arc(sx, sy, .17 * k, 0, TAU); g.fillStyle = I.col(hex(mix(col, '#FFE9D0', .18))); g.fill(); } g.restore(); }
       }
     });
   }
@@ -218,7 +221,7 @@ export function drawShip(iso, st) {
   iso.push(x, y, ZW, rot);
   const W0 = iso.w(0, 0, 0);
   if (st.wake > 0) iso.add(-8.5e5, () => { // V-shaped wake on the water behind the stern
-    const g = iso.g, k = iso.cam.k; g.save(); g.strokeStyle = iso.col('#E8F1F6', .85); g.lineCap = 'round'; g.lineWidth = Math.max(1.5, k * .35);
+    const g = iso.g, k = iso.cam.k; g.save(); g.strokeStyle = iso.col('#E8F1F6', .85); g.lineCap = 'round'; g.lineWidth = Math.max(1.5 * FS, k * .35);
     for (let i = 0; i < 5; i++) { const d = 4 + i * 7 * st.wake, sp = 2 + i * 2.6 * st.wake; g.globalAlpha = (1 - i / 5) * .8; for (const sgn of [-1, 1]) { const a = iso.L(-L / 2 - d, sgn * (Wd / 2 + sp * .2), 0), b = iso.L(-L / 2 - d - 5 * st.wake, sgn * (Wd / 2 + sp), 0); g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); } }
     const a = iso.L(L / 2, -Wd / 2 - .5, 0), b = iso.L(L / 2 + 1, 0, 0), c = iso.L(L / 2, Wd / 2 + .5, 0); g.globalAlpha = .9; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.lineTo(c[0], c[1]); g.stroke(); g.restore();
   }, 0);
@@ -262,7 +265,7 @@ export function drawShip(iso, st) {
 // container ribs (vertical lines on the two visible long faces) — only when big enough on screen
 export function ribs(u, v, z, l = SHIP.cl, w = SHIP.cw - .08, h = SHIP.ch - .06) {
   return (I) => {
-    if (I.cam.k * I.scale() < 9) return; const g = I.g; g.save(); g.lineWidth = Math.max(.6, I.cam.k * .04); g.strokeStyle = I.col('#000', .16);
+    if (I.cam.k * I.scale() < 9 * FS) return; const g = I.g; g.save(); g.lineWidth = Math.max(.6 * FS, I.cam.k * .04); g.strokeStyle = I.col('#000', .16);
     const nv = I.wn(0, 1, 0), fy = nv[0] + nv[1] > 0 ? v + w : v; const nu = I.wn(1, 0, 0), fx = nu[0] + nu[1] > 0 ? u + l : u;
     g.beginPath(); for (let i = 1; i < 12; i++) { const uu = u + l * i / 12; const a = I.L(uu, fy, z + .15), b = I.L(uu, fy, z + h - .15); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); }
     for (let i = 1; i < 5; i++) { const vv = v + w * i / 5; const a = I.L(fx, vv, z + .15), b = I.L(fx, vv, z + h - .15); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); } g.stroke(); g.restore();
@@ -299,8 +302,8 @@ export function crane(iso, x, y, st = {}) {
   const ty = y + (st.trolley ?? 16);
   iso.box(x - 1.4, ty - 1.2, H - 1, 3.5, 2.4, 1, tri('#3A3A3A'), { bias: 42 });
   const hz = st.hookZ ?? 8;
-  iso.line3([[x - .6, ty, H - 1], [x - .6, ty, hz + 1.2]], '#3A3230', 1.4, { bias: 41 });
-  iso.line3([[x + 1.2, ty, H - 1], [x + 1.2, ty, hz + 1.2]], '#3A3230', 1.4, { bias: 41 });
+  iso.line3([[x - .6, ty, H - 1], [x - .6, ty, hz + 1.2]], '#3A3230', 1.4 * FS, { bias: 41 });
+  iso.line3([[x + 1.2, ty, H - 1], [x + 1.2, ty, hz + 1.2]], '#3A3230', 1.4 * FS, { bias: 41 });
   if (st.box) {
     const bx = x - SHIP.cl / 2, by = ty - SHIP.cw / 2, bz = hz - SHIP.ch + 1.2;
     iso.add(bx + by + bz + 44, () => { const g = iso.g; g.save(); if (st.clip) { g.beginPath(); st.clip.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath(); g.clip(); } iso.boxNow(bx, by, bz, SHIP.cl, SHIP.cw, SHIP.ch, st.box, { decal: ribs(bx, by, bz) }); g.restore(); }, 1);
@@ -314,7 +317,7 @@ function craneFlip(iso, x, y, st) { // quay B: boom reaching back over the water
   iso.box(x - 3, y + 4 - reach, H, 6.7, reach + 6, 1.4, Cc, { bias: -10 });
   iso.box(x - 1.6, y + 7, H + 1.4, 3.9, 3, 3, tri('#EFE6D2'));
   const ty = y + (st.trolley ?? -12); iso.box(x - 1.4, ty - 1.2, H - 1, 3.5, 2.4, 1, tri('#3A3A3A'));
-  const hz = st.hookZ ?? 12; iso.line3([[x, ty, H - 1], [x, ty, hz]], '#3A3230', 1.4); iso.box(x - 2.4, ty - 1.3, hz - .35, 5.2, 2.6, .35, tri('#D9A53A'));
+  const hz = st.hookZ ?? 12; iso.line3([[x, ty, H - 1], [x, ty, hz]], '#3A3230', 1.4 * FS); iso.box(x - 2.4, ty - 1.3, hz - .35, 5.2, 2.6, .35, tri('#D9A53A'));
   iso.alpha = pa;
 }
 export function quayB(iso, t) {
@@ -341,7 +344,7 @@ export function drawCity(iso, t) {
 }
 function winDecal(b) {
   return (I) => {
-    const k = I.cam.k; if (k < 7) return; const c = I.col('#3E5E7E', .55);
+    const k = I.cam.k; if (k < 7 * FS) return; const c = I.col('#3E5E7E', .55);
     for (let z = 1.2; z < b.h - .8; z += 1.6) for (let i = 0; i < 3; i++) {
       const u = b.x + .6 + i * 1.45; const p = [[u, b.y + b.d + .01, z], [u + .8, b.y + b.d + .01, z], [u + .8, b.y + b.d + .01, z + .8], [u, b.y + b.d + .01, z + .8]].map(q => I.L(...q)); I.poly(p, c);
       const v = b.y + .6 + i * 1.45; const q2 = [[b.x + b.w + .01, v, z], [b.x + b.w + .01, v + .8, z], [b.x + b.w + .01, v + .8, z + .8], [b.x + b.w + .01, v, z + .8]].map(q => I.L(...q)); I.poly(q2, I.col('#2E4A64', .55));
@@ -402,8 +405,8 @@ export function cutBuilding(iso, B, st) {
 function hatchTop(iso, x, y, w, d, h) {
   const pts = [[x, y], [x + w, y], [x + w, y + d], [x, y + d]].map(q => iso.P(q[0], q[1], h + .01));
   const g = iso.g; g.save(); g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath(); g.fillStyle = iso.col('#FBF4E6'); g.fill(); g.clip();
-  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]); g.strokeStyle = iso.col('#2E2522', .55); g.lineWidth = 1.2; g.beginPath();
-  for (let s = Math.min(...xs) - 300; s < Math.max(...xs); s += 6) { g.moveTo(s, Math.max(...ys)); g.lineTo(s + (Math.max(...ys) - Math.min(...ys)), Math.min(...ys)); } g.stroke(); g.restore();
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]); g.strokeStyle = iso.col('#2E2522', .55); g.lineWidth = 1.2 * FS; g.beginPath();
+  for (let s = Math.min(...xs) - 300 * FS; s < Math.max(...xs); s += 6 * FS) { g.moveTo(s, Math.max(...ys)); g.lineTo(s + (Math.max(...ys) - Math.min(...ys)), Math.min(...ys)); } g.stroke(); g.restore();
 }
 
 // ---------- hold, container interior, sacks (ship-local coordinates; called inside the ship transform) ----------
@@ -439,11 +442,11 @@ function containerOpen(iso, u, v, z, o, st) {
 }
 function sackDecal(su, sv, sz, st) {
   return (I) => {
-    const k = I.cam.k * I.scale(); if (k < 25) return;
+    const k = I.cam.k * I.scale(); if (k < 25 * FS) return;
     const g = I.g; const p = (a, c) => I.L(su + a, sv - .005, sz + c);
-    g.save(); g.strokeStyle = I.col('#8A6A40', .8); g.lineWidth = Math.max(1, k * .012);
+    g.save(); g.strokeStyle = I.col('#8A6A40', .8); g.lineWidth = Math.max(1 * FS, k * .012);
     g.beginPath(); const a0 = p(.02, .5), a1 = p(.88, .5); g.moveTo(a0[0], a0[1]); g.lineTo(a1[0], a1[1]); g.stroke();
-    const b0 = p(.02, .56), b1 = p(.88, .56); g.strokeStyle = I.col('#B3352B', .7); g.lineWidth = Math.max(1, k * .02); g.beginPath(); g.moveTo(b0[0], b0[1]); g.lineTo(b1[0], b1[1]); g.stroke();
+    const b0 = p(.02, .56), b1 = p(.88, .56); g.strokeStyle = I.col('#B3352B', .7); g.lineWidth = Math.max(1 * FS, k * .02); g.beginPath(); g.moveTo(b0[0], b0[1]); g.lineTo(b1[0], b1[1]); g.stroke();
     g.restore();
     if (st && st.tear > 0 && st.tearDraw) st.tearDraw(I, su, sv, sz);
   };

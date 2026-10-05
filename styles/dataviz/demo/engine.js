@@ -3,7 +3,12 @@
 // World units = chart pixels at zoom 1. A 2D camera {x, y, zoom, roll, sx, sy} looks at the paper.
 import { clamp, lerp, hash, vnoise, mulberry } from '/core/lib.js';
 
-export const W = 1920, H = 1080;
+// The frame is not a constant: the renderer screenshots the browser viewport, so `--size/--ratio` changes it.
+// NATIVE is the frame the chart was composed on; setFrame() re-derives everything from the frame actually given.
+// At 1920×1080 FX = FY = S = 1, so every expression below reduces to exactly the number it replaced.
+export const NATIVE = { W: 1920, H: 1080 };
+export let W = NATIVE.W, H = NATIVE.H, FX = 1, FY = 1, S = 1;
+export function setFrame(w, h) { W = w; H = h; FX = w / NATIVE.W; FY = h / NATIVE.H; S = Math.min(FX, FY); }
 
 // ---------- palette ----------
 export const P = {
@@ -279,7 +284,7 @@ function pencilBody(g, s, end, axisScale) {
 export function drawPencil(g, o) {
   const { tip, s = 1, lift = 0, flip = 0, blur = 0, ang = 0.62, alpha = 1, focus = 1 } = o;
   if (alpha <= 0) return;
-  if (!_pc) { _pc = new OffscreenCanvas(W, H); _pb = new OffscreenCanvas(W, H); }
+  if (!_pc || _pc.width !== W || _pc.height !== H) { _pc = new OffscreenCanvas(W, H); _pb = new OffscreenCanvas(W, H); }
   const axisScale = Math.cos(clamp(flip) * Math.PI), end = axisScale >= 0 ? 'blue' : 'red', as = Math.max(.04, Math.abs(axisScale));
   const lz = 1 + lift * .35;                                           // closer to camera = bigger
   const draw = (c, col) => {
@@ -320,11 +325,11 @@ export function drawPencil(g, o) {
 // ---------- figure caption (the subtitle) ----------
 // words: [{w, t}] (absolute seconds). Words appear on their time; whole caption flips up when leaving.
 export function caption(g, words, t, o = {}) {
-  const { x = 180, y = 985, size = 42, maxW = 1380, kicker = '', t0 = 0, t1 = 1e9, color = P.ink } = o;
+  const { x = 180 * FX, y = 985 * FY, size = 42 * S, maxW = 1380 * FX, kicker = '', t0 = 0, t1 = 1e9, color = P.ink } = o;
   if (t < t0 || t > t1 + .3) return;
   const out = t > t1 ? clamp((t - t1) / .3) : 0, inn = clamp((t - t0) / .2);
   g.save(); g.setTransform(1, 0, 0, 1, 0, 0);
-  g.globalAlpha = (1 - out) * inn; g.translate(0, -out * 26);
+  g.globalAlpha = (1 - out) * inn; g.translate(0, -out * 26 * S);
   g.font = `400 ${size}px Newsreader`; g.textBaseline = 'alphabetic';
   // wrap
   const lines = [[]]; let lw = 0; const sp = g.measureText(' ').width;
@@ -333,15 +338,15 @@ export function caption(g, words, t, o = {}) {
   // rule + kicker
   const ruleY = top - size * 1.05;
   const maxLine = Math.max(...lines.map(L => L.reduce((a, b) => a + b.ww + sp, -sp)));
-  g.strokeStyle = P.ink; g.lineWidth = 1; g.globalAlpha *= .9;
-  g.beginPath(); g.moveTo(x, ruleY); g.lineTo(x + Math.max(260, maxLine) * clamp(inn * 1.2), ruleY); g.stroke();
-  if (kicker) setType(g, kicker, x, ruleY - 10, { size: 18, color: P.inkSoft });
+  g.strokeStyle = P.ink; g.lineWidth = 1 * S; g.globalAlpha *= .9;
+  g.beginPath(); g.moveTo(x, ruleY); g.lineTo(x + Math.max(260 * S, maxLine) * clamp(inn * 1.2), ruleY); g.stroke();
+  if (kicker) setType(g, kicker, x, ruleY - 10 * S, { size: 18 * S, color: P.inkSoft });
   g.fillStyle = color;
   lines.forEach((L, li) => {
     let cx = x;
     for (const wd of L) {
       const k = clamp((t - wd.t) / .125);
-      if (k > 0) { g.save(); g.globalAlpha *= k; g.fillText(wd.w, cx, top + li * lh + (1 - k) * 6); g.restore(); }
+      if (k > 0) { g.save(); g.globalAlpha *= k; g.fillText(wd.w, cx, top + li * lh + (1 - k) * 6 * S); g.restore(); }
       cx += wd.ww + sp;
     }
   });

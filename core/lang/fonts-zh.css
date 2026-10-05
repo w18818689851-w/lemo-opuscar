@@ -1,0 +1,31 @@
+/* fonts-zh.css — CJK companions to fonts.css, for a Chinese cut of the engraving style.
+ *
+ * A Chinese film swaps these in through the plate.js hook, e.g.
+ *     import { setFonts } from './engine/plate.js';
+ *     setFonts({ roman: '"Bodoni Moda", "Noto Serif SC"', script: '"LXGW WenKai"' });
+ * The stack matters: Bodoni keeps the Latin (titles, numerals, scientific names), the CJK
+ * face only picks up what Bodoni has no glyph for. Never name a CJK face "Bodoni Moda".
+ *
+ * Both files are SIL OFL 1.1 — see OFL-CJK.txt for the full licence text of each.
+ * Both are subsets: 通用规范汉字表 一级字 (3500) + CJK punctuation (U+3000–303F) +
+ * fullwidth forms (U+FF00–FFEF) + — … · “ ” ‘ ’ + printable ASCII.
+ */
+
+/* roman role — Noto Serif SC (思源宋体, Song/Ming serif), variable wght 200–900,
+   so the burin's weight calls get real outlines instead of synthesised bold. */
+@font-face {
+  font-family: "Noto Serif SC";
+  src: url("fonts/NotoSerifSC-Subset.woff2") format("woff2");
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: block;
+}
+
+/* script role — LXGW WenKai (霞鹜文楷), a Kai/handwritten face for the roundel notes. */
+@font-face {
+  font-family: "LXGW WenKai";
+  src: url("fonts/LXGWWenKai-Subset.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}

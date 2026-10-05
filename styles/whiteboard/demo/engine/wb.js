@@ -5,6 +5,17 @@
 //   render  : Board.render(ctx, t, cam) — board, ghosts, ink (with erasers), texture, objects
 import { clamp, lerp, vnoise, hash, mulberry, TAU } from '/core/lib.js';
 
+// 帧尺寸不是常量：渲染器截的是浏览器**视口**，`--size/--ratio` 会改它。NATIVE 是设计帧（1920×1080）。
+// 板面上的内容（世界坐标）由 2D 相机取景；相机的居中点与屏幕空间家什（墙/墨层/反光/字幕/笔/磁贴/板擦）
+// 都按实际帧重排：世界内容统一「设计帧 → 当前帧等比装入」（中心对齐、紧轴缩放 S），位置按轴拉伸（×FX/×FY）、
+// 尺寸按紧轴缩放（×S）。1920×1080 时 FX = FY = S = 1，每个表达式都退化成它替换掉的那个数字 ⇒ 16:9 逐字节不变。
+export const NATIVE = { W: 1920, H: 1080 };
+export let W = NATIVE.W, H = NATIVE.H, FX = 1, FY = 1, S = 1;
+export function setFrame(w, h) { W = w; H = h; FX = w / NATIVE.W; FY = h / NATIVE.H; S = Math.min(FX, FY); }
+// 设计帧(1920×1080) → 当前帧的「等比装入」变换：世界内容（相机里的板面/笔迹）与屏幕家什都走它才能对齐。
+// 1920×1080 时 S = 1、偏移 0 ⇒ 与 setTransform(1,0,0,1,0,0) 逐位相同。
+const dXf = (ctx) => ctx.setTransform(S, 0, 0, S, (W - NATIVE.W * S) / 2, (H - NATIVE.H * S) / 2);
+
 export const INK = { black: '#23262c', blue: '#2a5cb3', orange: '#d97757', red: '#c8413a', green: '#2e7a4d' };
 const RGB = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
 
@@ -305,10 +316,11 @@ export class Camera {
     const za = a.z, zb = b.z, z = Math.exp(lz), wgt = Math.abs(zb - za) > 1e-4 ? (1 / za - 1 / z) / (1 / za - 1 / zb) : e;
     return { x: lerp(a.x, b.x, wgt), y: lerp(a.y, b.y, wgt), z, r: lerp(a.r, b.r, e) };
   }
-  toWorld(sx, sy, t) { const c = this.at(t), dx = (sx - 960) / c.z, dy = (sy - 540) / c.z, cs = Math.cos(-c.r), sn = Math.sin(-c.r); return [c.x + dx * cs - dy * sn, c.y + dx * sn + dy * cs]; }
+  toWorld(sx, sy, t) { const c = this.at(t), ox = (W - NATIVE.W * S) / 2, oy = (H - NATIVE.H * S) / 2, dx = ((sx - ox) / S - 960) / c.z, dy = ((sy - oy) / S - 540) / c.z, cs = Math.cos(-c.r), sn = Math.sin(-c.r); return [c.x + dx * cs - dy * sn, c.y + dx * sn + dy * cs]; }
 }
-export function applyCam(ctx, c) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.translate(960, 540); ctx.rotate(c.r); ctx.scale(c.z, c.z); ctx.translate(-c.x, -c.y); }
-export function toScreen(c, x, y) { const dx = (x - c.x) * c.z, dy = (y - c.y) * c.z, cs = Math.cos(c.r), sn = Math.sin(c.r); return [960 + dx * cs - dy * sn, 540 + dx * sn + dy * cs]; }
+// 相机：把设计帧等比装入当前帧（中心对齐、×S），再套世界→设计帧的相机变换。16:9 时 S=1、偏移 0 ⇒ 与旧实现逐位相同。
+export function applyCam(ctx, c) { dXf(ctx); ctx.translate(960, 540); ctx.rotate(c.r); ctx.scale(c.z, c.z); ctx.translate(-c.x, -c.y); }
+export function toScreen(c, x, y) { const dx = (x - c.x) * c.z, dy = (y - c.y) * c.z, cs = Math.cos(c.r), sn = Math.sin(c.r); return [S * (960 + dx * cs - dy * sn) + (W - NATIVE.W * S) / 2, S * (540 + dx * sn + dy * cs) + (H - NATIVE.H * S) / 2]; }
 
 // ───────────────────────── textures
 function noiseTile(seed) {                          // dry-marker speckle & streaks (used with destination-out)
@@ -339,29 +351,30 @@ export class Board {
   // o: {W,H, frame, tray, ghosts:Stroke[], wall}
   constructor(tl, o = {}) {
     this.tl = tl; this.W = o.W ?? 8000; this.H = o.H ?? 4500; this.ghosts = o.ghosts || [];
-    this.ink = new OffscreenCanvas(1920, 1080); this.ig = this.ink.getContext('2d');
+    this.ink = new OffscreenCanvas(W, H); this.ig = this.ink.getContext('2d');
     this.nt = noiseTile(7); this.bt = boardTile(11);
     this.objs = [];                                 // {draw(ctx, t, cam)} in world, drawn after ink
     this.overlays = [];                             // {draw(ctx, t, cam)} in screen space
   }
   render(ctx, t, cam) {
-    const c = cam.at(t), W = this.W, H = this.H;
+    const c = cam.at(t), BW = this.W, BH = this.H;
+    if (this.ink.width !== W || this.ink.height !== H) { this.ink.width = W; this.ink.height = H; }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     // wall (only visible on wide shots)
-    ctx.fillStyle = '#d8d3ca'; ctx.fillRect(0, 0, 1920, 1080);
+    ctx.fillStyle = '#d8d3ca'; ctx.fillRect(0, 0, W, H);
     applyCam(ctx, c);
     if (c.z < .5) this.frame(ctx, c);
     // board surface
-    const g = ctx.createLinearGradient(0, 0, W * .3, H);
+    const g = ctx.createLinearGradient(0, 0, BW * .3, BH);
     g.addColorStop(0, '#fbfbf9'); g.addColorStop(1, '#eeede9');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    const pat = ctx.createPattern(this.bt, 'repeat'); pat.setTransform(new DOMMatrix().scale(1.6)); ctx.fillStyle = pat; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, BW, BH);
+    const pat = ctx.createPattern(this.bt, 'repeat'); pat.setTransform(new DOMMatrix().scale(1.6)); ctx.fillStyle = pat; ctx.fillRect(0, 0, BW, BH);
     // ghosts of old lessons
     ctx.save(); ctx.globalAlpha = 1;
     for (const s of this.ghosts) { ctx.fillStyle = s.color || '#9aa0a8'; ctx.globalAlpha = s.alpha; ctx.beginPath(); ribbon(ctx, s, s.len, 1.5); ctx.fill(); }
     ctx.restore();
     // ink layer
-    const ig = this.ig; ig.setTransform(1, 0, 0, 1, 0, 0); ig.clearRect(0, 0, 1920, 1080); applyCam(ig, c);
+    const ig = this.ig; ig.setTransform(1, 0, 0, 1, 0, 0); ig.clearRect(0, 0, W, H); applyCam(ig, c);
     const vw = 1400 / c.z, vx0 = c.x - vw, vx1 = c.x + vw, vy0 = c.y - vw, vy1 = c.y + vw;
     const E = this.tl.erasers; let ep = 0;
     const flushErasers = upto => {
@@ -395,12 +408,12 @@ export class Board {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.drawImage(this.ink, 0, 0); ctx.restore();
     // specular sheen: a soft window reflection that drifts slower than the board (sells the gloss)
-    ctx.save(); applyCam(ctx, c); ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
+    ctx.save(); applyCam(ctx, c); ctx.beginPath(); ctx.rect(0, 0, BW, BH); ctx.clip();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    const sx = -c.x * c.z * .35 + 900, sh = ctx.createLinearGradient(sx - 700, 0, sx + 700, 1080);
+    const sx = (-c.x * c.z * .35 + 900) * S + (W - NATIVE.W * S) / 2, sh = ctx.createLinearGradient(sx - 700 * S, 0, sx + 700 * S, H);
     sh.addColorStop(0, 'rgba(255,255,255,0)'); sh.addColorStop(.45, 'rgba(255,255,255,.10)'); sh.addColorStop(.5, 'rgba(255,255,255,.16)');
     sh.addColorStop(.55, 'rgba(255,255,255,.10)'); sh.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = sh; ctx.fillRect(0, 0, 1920, 1080); ctx.restore();
+    ctx.fillStyle = sh; ctx.fillRect(0, 0, W, H); ctx.restore();
     // world objects (magnets, pens, eraser)
     for (const o of this.objs) { ctx.save(); o.draw(ctx, t, c, cam); ctx.restore(); }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -424,7 +437,7 @@ export class Board {
 // dry-erase marker, drawn at its world tip. No hand: it floats, lifts, and parks off-frame.
 export function drawMarker(ctx, pen, pose, c, t) {
   if (!pose) return;
-  const [sx, sy] = toScreen(c, pose.x, pose.y), z = Math.min(c.z, 1.25), L = pen.len * z;
+  const [sx, sy] = toScreen(c, pose.x, pose.y), z = Math.min(c.z, 1.25) * S, L = pen.len * z;
   const lift = pose.lift, wob = Math.sin(t * 5.3 + pen.id.length) * .02;
   const ang = pose.ang ?? (-0.95 + wob - lift * .06);              // body points up-right from the tip
   const ca = Math.cos(ang), sa = Math.sin(ang);
@@ -458,7 +471,7 @@ export function drawEraser(ctx, e, t, c) {
   if (t < e.t0) { const u = (t - e.t0 + .45) / .45; [x, y] = [P0[0] + 500 * (1 - u), P0[1] + 700 * (1 - u) ** 2]; lift = 1 - u; }
   else if (t > e.t1) { const u = (t - e.t1) / .45; [x, y] = [P1[0] + 500 * u, P1[1] + 700 * u * u]; lift = u; }
   else[x, y] = e.path.at(e.path.len * (t - e.t0) / (e.t1 - e.t0));
-  const [sx, sy] = toScreen(c, x, y), z = c.z, w = e.width * 1.9 * z, h = e.width * 1.0 * z, up = lift * 30 * z;
+  const [sx, sy] = toScreen(c, x, y), z = c.z * S, w = e.width * 1.9 * z, h = e.width * 1.0 * z, up = lift * 30 * z;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.save(); ctx.filter = `blur(${(8 + lift * 12) * z}px)`; ctx.fillStyle = `rgba(40,40,50,${.3 - lift * .1})`;
   ctx.beginPath(); ctx.roundRect(sx - w / 2 + 10 * z + up, sy - h / 2 + 16 * z + up, w, h, 14 * z); ctx.fill(); ctx.restore();
@@ -472,7 +485,7 @@ export function drawEraser(ctx, e, t, c) {
 }
 // flat map-pin magnet (the only glossy, physical object on the board)
 export function drawPinMagnet(ctx, x, y, c, o = {}) {
-  const [sx, sy] = toScreen(c, x, y), s = (o.size ?? 150) * c.z / 150, lift = o.lift ?? 0, up = lift * 40 * s;
+  const [sx, sy] = toScreen(c, x, y), s = (o.size ?? 150) * c.z * S / 150, lift = o.lift ?? 0, up = lift * 40 * s;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   const shape = (g) => { g.beginPath(); g.moveTo(0, 0); g.bezierCurveTo(-18, -40, -58, -70, -58, -112); g.arc(0, -112, 58, Math.PI, 0); g.bezierCurveTo(58, -70, 18, -40, 0, 0); g.closePath(); };
   ctx.save(); ctx.translate(sx + (8 + up * .8) * s, sy + (12 + up) * s); ctx.scale(s, s); ctx.filter = `blur(${(7 + lift * 14) * s}px)`;

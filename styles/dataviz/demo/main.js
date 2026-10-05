@@ -1,5 +1,9 @@
 import { renderFilm, setData, setCaptions, subs, buildEvents, DUR } from './film.js';
 const cv = document.getElementById('c'), g = cv.getContext('2d');
+// 输出尺寸 = 视口尺寸（渲染器截的是浏览器视口，不是 canvas）。canvas 必须跟着视口走，
+// 否则 --size/--ratio 只会把画面裁掉一块。改 canvas 尺寸要在 render 之前，并重设 width/height 属性。
+const VW = window.innerWidth, VH = window.innerHeight;
+cv.width = VW; cv.height = VH;
 await Promise.all(['400 40px Newsreader', '500 40px Newsreader', '500 40px Caveat', '400 20px "IBM Plex Mono"', '500 20px "IBM Plex Mono"'].map(f => document.fonts.load(f)));
 setData(await (await fetch('data/jja.json')).json());
 const lines = await (await fetch('lines.json')).json();
@@ -10,7 +14,7 @@ window.EV = buildEvents();
 window.SUBS = subs();
 const Q = new URLSearchParams(location.search);
 import * as E from './engine.js';
-window.render = Q.has('engine') ? () => engineDemo(g) : t => renderFilm(g, t, { nosub: Q.has('nosub') });
+window.render = Q.has('engine') ? () => engineDemo(g) : t => renderFilm(g, t, { nosub: Q.has('nosub'), W: VW, H: VH });
 // ?engine=1 : the engine drawing an arbitrary shape (a #D97757 four-point spark with a cursor tail) three ways
 function engineDemo(g) {
   const cam = { x: 0, y: 0, zoom: 1, roll: 0 };

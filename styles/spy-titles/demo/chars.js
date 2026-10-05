@@ -1,9 +1,9 @@
 // 剪纸角色：特工 THE AGENT、信使 THE COURIER、黄铜钥匙。四肢是分开的纸片，关节处有切缝（Anatomy 断肢语法）
 // 坐标：脚底中点为原点，y 向下，面朝 +x。s = 缩放（1 = 特工约 540px 高）
-import { g, C, piece, roughC, rough, smooth, circP, ellP, xf, S, curScale, silhouette, slit } from './paper.js';
+import { g, C, piece, roughC, rough, smooth, circP, ellP, xf, ST, curScale, silhouette, slit } from './paper.js';
 // 包一层剪影图层（已在图层里就直接画）
 function cutPoly(pts) { g.save(); g.globalCompositeOperation = 'destination-out'; g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.closePath(); g.fillStyle = '#000'; g.fill(); g.restore(); }
-function sil(fn, opt) { if (S.inLayer) return fn(); let r; silhouette(() => { r = fn(); }, opt || {}); return r; }
+function sil(fn, opt) { if (ST.inLayer) return fn(); let r; silhouette(() => { r = fn(); }, opt || {}); return r; }
 
 const R = Math;
 // 锥形肢体（骨骼沿 +y，关节在原点）
@@ -106,7 +106,7 @@ function agentSideRaw(x, y, s, pose, opt = {}) {
   };
   // 远侧（稍暗一点的墨 = 叠在后面的纸）
   const far = opt.farCol || ink;
-  S._ink = ink;
+  ST._ink = ink;
   armAt(p.shB, p.elB, 'B', false);
   { const c0 = ink; legAt(p.thB, p.knB, p.ftB, 'B'); }
   // 躯干

@@ -1,4 +1,9 @@
-const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+// 输出尺寸 = 视口尺寸（渲染器截的是浏览器**视口**，不是 canvas）。canvas 必须跟着视口走，
+// 否则 --size/--ratio 只会把 1920×1080 的画面裁掉一块；版面由 film.js 的 setFrame() 按实际帧重排。
+const cv = document.getElementById('c');
+cv.width = window.innerWidth; cv.height = window.innerHeight;
+setFrame(cv.width, cv.height);
+const ctx = cv.getContext('2d');
 
 // ---------- 地图（深时间） ----------
 const MAPC = { k: 24, cx: 830, cy: 520, lon0: 133.8, lat0: -27.0, c: Math.cos(26 * Math.PI / 180) };
@@ -218,7 +223,11 @@ function drawEnd(t) {
 let PAPER_IMG;
 function render(t) {
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.shadowBlur = 0;
-  ctx.drawImage(PAPER_IMG, 0, 0);
+  // 纸：铺满**当前帧**（竖幅多出的上下留白也是纸）。按原尺寸平铺、不拉伸纹理；
+  // 1920×1080 时只画一格 ⇒ 与改造前的 drawImage(PAPER_IMG, 0, 0) 逐位相同。
+  ctx.fillStyle = PAPER; ctx.fillRect(0, 0, FW, FH);
+  for (let y = 0; y < FH; y += NATIVE.H) for (let x = 0; x < FW; x += NATIVE.W) ctx.drawImage(PAPER_IMG, x, y);
+  fit(1, 0, 0, 1, 0, 0);   // 世界内容：设计帧 → 当前帧等比装入（1920×1080 时 = 恒等）
   if (t < 73.7) { drawLandscape(t); drawNotes(t); }
   if (t > 70.3) drawMist(t);
   if (t > 73.2) drawMap(t);
@@ -226,6 +235,7 @@ function render(t) {
   if (t < 11) drawTitle(t);
   drawEnd(t);
   drawSubs(t);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
 }
 window.render = render;
 

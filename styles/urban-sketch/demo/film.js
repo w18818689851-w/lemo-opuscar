@@ -4,6 +4,17 @@ import { buildWorld, W, H, depthS, FIG_H, LAMP, BRIDGE, CROWNS, ORIGIN, inPage }
 import { LOOK, sit, run, walk, stand, cycle, dive, prone, wave, mixPose } from './poses.js';
 const { V } = R3;
 
+// ---------------- 帧尺寸（多比例）----------------
+// 渲染器截的是浏览器**视口**，`--size/--ratio` 会改它；main.js 先把 canvas 设成视口尺寸再 import 本模块。
+// NATIVE = 设计帧（1920×1080）。SW/SH = 当前帧；FX/FY = 位置按轴拉伸（×FX/×FY）、S = 尺寸/字号/线宽按紧轴缩放。
+// 本片是一台 2D 相机在 5120×2880 的整页上移动：**世界按紧轴统一缩小、仍居中**（相机 zoom ×S），
+// 所以世界坐标不再另乘 FX/FY（否则会二次缩放）；只有屏幕中心这一处属于当前帧。
+// 1920×1080 时 FX=FY=S=1、SW/2=960、SH/2=540，每个表达式退化成它替换掉的那个数字 ⇒ 16:9 逐字节不变。
+export const NATIVE = { W: 1920, H: 1080 };
+export let SW = NATIVE.W, SH = NATIVE.H, FX = 1, FY = 1, S = 1;
+// 影片元数据：aspects 是**字面量**（lib/aspects.mjs 按文本正则探测，不写 = 只支持 16:9）。
+export const FILM_META = { id: 'where-the-wind-went', title: 'Where the Wind Went', style: 'Urban Sketch · Pen & Wash', aspects: ['16:9', '9:16'] };
+
 export const BPM = 150, BEAT = 60 / BPM, BAR = BEAT * 3;
 const DUR = 32.4;
 const q = new URLSearchParams(location.search);
@@ -187,7 +198,11 @@ function camera(t) {
 
 // ---------------- 画面 ----------------
 const cvs = document.getElementById('c'), ctx = cvs.getContext('2d');
-const glc = document.createElement('canvas'); glc.width = 1920; glc.height = 1080;
+// 帧尺寸 = canvas 尺寸（main.js 已按视口设好；直接 import 本模块时退回设计帧）。
+// 顶层只读帧尺寸、不算几何：几何都在下面的 render() 里按 SW/SH 派生一次。
+SW = cvs.width || NATIVE.W; SH = cvs.height || NATIVE.H;
+FX = SW / NATIVE.W; FY = SH / NATIVE.H; S = Math.min(FX, FY);
+const glc = document.createElement('canvas'); glc.width = SW; glc.height = SH;
 const comp = compositor(glc, { ...world, arr, gw: GW, gh: GH });
 // 纸纹（乘法叠在最上面，连同人物一起）
 const tooth = (() => { const c = document.createElement('canvas'); c.width = c.height = 512; const x = c.getContext('2d'); const im = x.createImageData(512, 512); const R = rng(77);
@@ -302,12 +317,13 @@ function notes(t) {
 window.DUR = DUR;
 window.render = t => {
   const cam = camera(t);
+  cam.z *= S;                       // 相机 zoom ×S：世界按紧轴统一缩小、仍居中（9:16 不裁切、不二次缩放）
   comp(cam, t);
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'source-over';
   ctx.drawImage(glc, 0, 0);
-  // 世界坐标
+  // 世界坐标（屏幕中心取当前帧的 SW/2, SH/2）
   const c = Math.cos(cam.rot), s = Math.sin(cam.rot);
-  ctx.setTransform(cam.z * c, cam.z * s, -cam.z * s, cam.z * c, 960 - cam.z * (c * cam.cx - s * cam.cy), 540 - cam.z * (s * cam.cx + c * cam.cy));
+  ctx.setTransform(cam.z * c, cam.z * s, -cam.z * s, cam.z * c, SW / 2 - cam.z * (c * cam.cx - s * cam.cy), SH / 2 - cam.z * (s * cam.cx + c * cam.cy));
   // 人物按深度（y）从远到近
   const hs = him(t), herP = herPose(t), herPrims = figure(LOOK.her, herP, { ...HER }, { seed: 50, boil: boilOf(t) });
   const himPrims = figure(LOOK.him, hs.pose, hs.place, { seed: 70, boil: boilOf(t) });
@@ -337,8 +353,10 @@ window.render = t => {
   notes(t);
   // 纸纹
   ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = toothPat;
-  ctx.setTransform(cam.z * c * .8, cam.z * s * .8, -cam.z * s * .8, cam.z * c * .8, 960 - cam.z * (c * cam.cx - s * cam.cy), 540 - cam.z * (s * cam.cx + c * cam.cy));
-  const iz = 1 / (cam.z * .8); ctx.fillRect((cam.cx - 1300 / cam.z) / .8, (cam.cy - 800 / cam.z) / .8, 2600 * iz, 1600 * iz); ctx.restore();
+  ctx.setTransform(cam.z * c * .8, cam.z * s * .8, -cam.z * s * .8, cam.z * c * .8, SW / 2 - cam.z * (c * cam.cx - s * cam.cy), SH / 2 - cam.z * (s * cam.cx + c * cam.cy));
+  // 纸纹要盖满**当前帧**：宽/高取 max(设计帧的余量, 半帧)，1920×1080 时退回原来的 1300/800（逐字节不变）。
+  const iz = 1 / (cam.z * .8), MX = Math.max(1300, SW / 2 + 8), MY = Math.max(800, SH / 2 + 8);
+  ctx.fillRect((cam.cx - MX / cam.z) / .8, (cam.cy - MY / cam.z) / .8, 2 * MX * iz, 2 * MY * iz); ctx.restore();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 };
 

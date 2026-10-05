@@ -20,9 +20,14 @@
   --kk:#D39AD0; --ks:#9BCB8E; --kf:#8EB6EE; --sel:#34322E;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{width:1920px;height:1080px;overflow:hidden;background:#E9E1D1}
+html,body{width:100vw;height:100vh;overflow:hidden;background:#E9E1D1}
 body{font-family:Inter,sans-serif;-webkit-font-smoothing:antialiased}
 #stage{position:absolute;inset:0;overflow:hidden}
+/* 设计帧（1920×1080）→ 当前帧的「等比装入」：渲染器截的是浏览器**视口**，--size/--ratio 会改它。
+   世界层（相机里的桌面/窗口/Claude 应用）与屏幕空间家什（HUD/字幕/转场/片尾卡）都活在设计帧里，
+   由 main.js 把 #fit 整体「中心对齐 + 紧轴缩放 S」装进当前帧；相机的 zoom 不改（设计帧内取景）。
+   1920×1080 时 S = 1、偏移 0 ⇒ main.js 不套变换 ⇒ 与改造前逐字节相同。 */
+#fit{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0}
 .layer{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0}
 .world{color:var(--ink)}
 #wall{position:absolute;left:-1200px;top:-900px;width:4320px;height:2880px;background:
@@ -153,38 +158,42 @@ body{font-family:Inter,sans-serif;-webkit-font-smoothing:antialiased}
 /* 精灵层 */
 .px{position:absolute;image-rendering:pixelated;overflow:visible}
 .ring{position:absolute;border-radius:50%;border:3px solid var(--clay)}
-/* HUD */
-#hud{position:absolute;inset:0;pointer-events:none;z-index:10}
-.cap{position:absolute;left:50%;bottom:52px;max-width:1400px;text-align:center;font-size:33px;font-weight:500;line-height:1.3;letter-spacing:-.005em;white-space:nowrap;
-  color:#1F1E1C;background:rgba(250,249,245,.88);backdrop-filter:blur(14px);padding:12px 26px;border-radius:16px;box-shadow:0 0 0 1px rgba(0,0,0,.06),0 8px 28px rgba(60,40,20,.14)}
-.cap.dk{color:#EEEAE2;background:rgba(30,29,27,.82);box-shadow:0 0 0 1px rgba(255,255,255,.08),0 8px 28px rgba(0,0,0,.4)}
+/* HUD —— 屏幕空间：贴在**当前帧**上（不是设计帧）。尺寸/字号/线宽按紧轴缩放 S，贴边位置按 FX/FY 拉伸，
+   这样全屏叠加（划像/闪光/淡出/聚光）能盖满整帧、字幕与章节签落在真正的画面边缘；世界映射类（聚光/提示）
+   的位置由 main.js 用「世界 → 当前帧」换算给出。1920×1080 时 FX = FY = S = 1，每个 calc 都退化成原数字。 */
+#hud{position:absolute;inset:0;pointer-events:none;z-index:10;--s:1;--fx:1;--fy:1}
+.cap{position:absolute;left:50%;bottom:calc(52px * var(--fy));max-width:calc(1400px * var(--fx));text-align:center;font-size:calc(33px * var(--s));font-weight:500;line-height:1.3;letter-spacing:-.005em;white-space:nowrap;
+  color:#1F1E1C;background:rgba(250,249,245,.88);backdrop-filter:blur(calc(14px * var(--s)));padding:calc(12px * var(--s)) calc(26px * var(--s));border-radius:calc(16px * var(--s));box-shadow:0 0 0 1px rgba(0,0,0,.06),0 calc(8px * var(--s)) calc(28px * var(--s)) rgba(60,40,20,.14)}
+.cap.dk{color:#EEEAE2;background:rgba(30,29,27,.82);box-shadow:0 0 0 1px rgba(255,255,255,.08),0 calc(8px * var(--s)) calc(28px * var(--s)) rgba(0,0,0,.4)}
 .cap em{font-style:normal;color:#BD5D3A}.cap.dk em{color:#EE9A7B}
-.keys{position:absolute;left:56px;bottom:56px;display:flex;align-items:center;gap:8px;font-size:17px;font-weight:600;color:#fff;background:rgba(31,30,28,.88);padding:10px 14px;border-radius:14px}
-.keys i{font-style:normal;min-width:38px;height:38px;padding:0 9px;border-radius:8px;background:#3A3834;display:grid;place-items:center;box-shadow:inset 0 -3px 0 rgba(0,0,0,.4);font-size:18px}
-.keys i.dn{transform:translateY(2px);box-shadow:inset 0 -1px 0 rgba(0,0,0,.4);background:#D97757}
-.keys span{margin-left:6px;color:#D8D2C6;font-weight:500}
-.chap{position:absolute;left:56px;top:48px;display:flex;align-items:center;gap:14px;font-family:News;font-size:30px;font-weight:450;color:#1F1E1C;background:rgba(250,249,245,.9);padding:10px 20px 10px 12px;border-radius:14px;box-shadow:0 0 0 1px rgba(0,0,0,.06),0 8px 28px rgba(60,40,20,.12);white-space:nowrap;overflow:hidden}
+.keys{position:absolute;left:calc(56px * var(--fx));bottom:calc(56px * var(--fy));display:flex;align-items:center;gap:calc(8px * var(--s));font-size:calc(17px * var(--s));font-weight:600;color:#fff;background:rgba(31,30,28,.88);padding:calc(10px * var(--s)) calc(14px * var(--s));border-radius:calc(14px * var(--s))}
+.keys i{font-style:normal;min-width:calc(38px * var(--s));height:calc(38px * var(--s));padding:0 calc(9px * var(--s));border-radius:calc(8px * var(--s));background:#3A3834;display:grid;place-items:center;box-shadow:inset 0 calc(-3px * var(--s)) 0 rgba(0,0,0,.4);font-size:calc(18px * var(--s))}
+.keys i.dn{transform:translateY(calc(2px * var(--s)));box-shadow:inset 0 calc(-1px * var(--s)) 0 rgba(0,0,0,.4);background:#D97757}
+.keys span{margin-left:calc(6px * var(--s));color:#D8D2C6;font-weight:500}
+.chap{position:absolute;left:calc(56px * var(--fx));top:calc(48px * var(--fy));display:flex;align-items:center;gap:calc(14px * var(--s));font-family:News;font-size:calc(30px * var(--s));font-weight:450;color:#1F1E1C;background:rgba(250,249,245,.9);padding:calc(10px * var(--s)) calc(20px * var(--s)) calc(10px * var(--s)) calc(12px * var(--s));border-radius:calc(14px * var(--s));box-shadow:0 0 0 1px rgba(0,0,0,.06),0 calc(8px * var(--s)) calc(28px * var(--s)) rgba(60,40,20,.12);white-space:nowrap;overflow:hidden}
 .chap.dk{color:#EEEAE2;background:rgba(30,29,27,.85)}
-.chap b{font-family:Inter;font-size:14px;font-weight:700;color:#fff;background:#D97757;border-radius:7px;padding:5px 9px;letter-spacing:.04em}
-.ramp{position:absolute;right:56px;top:48px;font-family:Mono;font-size:22px;font-weight:700;color:#fff;background:#D97757;padding:8px 14px;border-radius:10px;letter-spacing:.02em}
+.chap b{font-family:Inter;font-size:calc(14px * var(--s));font-weight:700;color:#fff;background:#D97757;border-radius:calc(7px * var(--s));padding:calc(5px * var(--s)) calc(9px * var(--s));letter-spacing:.04em}
+.ramp{position:absolute;right:calc(56px * var(--fx));top:calc(48px * var(--fy));font-family:Mono;font-size:calc(22px * var(--s));font-weight:700;color:#fff;background:#D97757;padding:calc(8px * var(--s)) calc(14px * var(--s));border-radius:calc(10px * var(--s));letter-spacing:.02em}
 .wipe{position:absolute;inset:0}
 .wipe b{position:absolute;display:block}
 .wlabel{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;color:#FFF8F0;white-space:nowrap}
-.wlabel .no{font-family:Mono;font-size:30px;font-weight:700;letter-spacing:.2em;opacity:.8;margin-bottom:14px}
-.wlabel .nm{font-family:News;font-size:112px;font-weight:360;letter-spacing:-.02em;line-height:1.1}
+.wlabel .no{font-family:Mono;font-size:calc(30px * var(--s));font-weight:700;letter-spacing:.2em;opacity:.8;margin-bottom:calc(14px * var(--s))}
+.wlabel .nm{font-family:News;font-size:calc(112px * var(--s));font-weight:360;letter-spacing:-.02em;line-height:1.1}
 .spot{position:absolute;inset:0}
 .flash{position:absolute;inset:0;background:#fff}
-.toast{position:absolute;background:#1F1E1C;color:#fff;border-radius:10px;padding:9px 15px;font-size:15px;font-weight:600;box-shadow:0 8px 20px rgba(0,0,0,.25);white-space:nowrap}
+.toast{position:absolute;background:#1F1E1C;color:#fff;border-radius:calc(10px * var(--s));padding:calc(9px * var(--s)) calc(15px * var(--s));font-size:calc(15px * var(--s));font-weight:600;box-shadow:0 calc(8px * var(--s)) calc(20px * var(--s)) rgba(0,0,0,.25);white-space:nowrap}
 .end{position:absolute;left:0;right:0;text-align:center;white-space:nowrap}
 .fade{position:absolute;inset:0;background:#FAF9F5}
 </style></head>
 <body>
 <svg width="0" height="0" style="position:absolute"><filter id="mb" x="-5%" y="-5%" width="110%" height="110%"><feGaussianBlur id="mbg" stdDeviation="0 0"/></filter></svg>
 <div id="stage">
-  <div id="mbw" style="position:absolute;inset:0">
-    <div id="wL" class="layer world th"></div>
-    <div id="wD" class="layer world th dark"></div>
-    <div id="spr" class="layer" style="z-index:5"></div>
+  <div id="fit">
+    <div id="mbw" style="position:absolute;inset:0">
+      <div id="wL" class="layer world th"></div>
+      <div id="wD" class="layer world th dark"></div>
+      <div id="spr" class="layer" style="z-index:5"></div>
+    </div>
   </div>
   <div id="hud"></div>
 </div>

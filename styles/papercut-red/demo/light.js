@@ -1,8 +1,8 @@
 // 夜景光照：画面 = 纸(正面受光的底色) × 光照图 L + 自发光 E（背光窗花）+ 辉光 + 体积光
 import { PAL, canvas, transmitOf } from './paper.js';
 import { put } from './rig.js';
-const W = 1920, H = 1080;
-const [Lc, L] = canvas(W, H), [Ec, E] = canvas(W, H), [Hc, Hg] = canvas(W / 2, H / 2), [H2c, H2] = canvas(W / 2, H / 2);
+import { W, H, fcanvas } from './film.js';
+const [Lc, L] = fcanvas(), [Ec, E] = fcanvas(), [Hc, Hg] = fcanvas(.5, .5), [H2c, H2] = fcanvas(.5, .5);
 export { L, E, Lc, Ec };
 export function beginLight(amb = 'rgb(118,120,168)') {
   L.setTransform(1, 0, 0, 1, 0, 0); L.globalCompositeOperation = 'source-over'; L.globalAlpha = 1; L.fillStyle = amb; L.fillRect(0, 0, W, H);
@@ -24,7 +24,7 @@ export function lightImage(img, M, a = 1, col = null, blur = 0) {
 // 光照图上"全亮"区域（窗户等自发光区域保持原亮度）
 export function lightRect(fn) { L.save(); L.globalCompositeOperation = 'source-over'; L.fillStyle = '#fff'; L.beginPath(); fn(L); L.fill(); L.restore(); }
 // 只落在某个图层（mask 画布的 alpha）上的投影纹样
-const [Mc, Mg] = canvas(W, H);
+const [Mc, Mg] = fcanvas();
 export function lightMasked(img, M, maskCanvas, a = 1, col = 'rgb(255,200,140)', blur = 0) {
   Mg.setTransform(1, 0, 0, 1, 0, 0); Mg.globalCompositeOperation = 'source-over'; Mg.clearRect(0, 0, W, H);
   Mg.setTransform(...M); if (blur) Mg.filter = `blur(${blur}px)`; Mg.drawImage(img.c, img.x0, img.y0, img.w, img.h); Mg.filter = 'none';
@@ -84,7 +84,7 @@ export function rays(g, cx, cy, a = .5, n = 18, maxS = 2.2, tint = null) {
   g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'lighter'; g.globalAlpha = a; g.filter = 'blur(3px)'; g.drawImage(H2c, 0, 0, W, H); g.restore();
 }
 // 加亮（叠加到画面上，不经过光照图）：纹样 × 图层蒙版，用 lighter 叠加 → 被照到处比纸本色更亮
-const [Ac, Ag] = canvas(W, H);
+const [Ac, Ag] = fcanvas();
 export function addMasked(g, img, M, maskCanvas, col = 'rgb(255,190,130)', a = 1, blur = 0) {
   Ag.setTransform(1, 0, 0, 1, 0, 0); Ag.globalCompositeOperation = 'source-over'; Ag.clearRect(0, 0, W, H);
   Ag.setTransform(...M); if (blur) Ag.filter = `blur(${blur}px)`; Ag.drawImage(img.c, img.x0, img.y0, img.w, img.h); Ag.filter = 'none';

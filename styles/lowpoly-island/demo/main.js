@@ -5,9 +5,13 @@ import { DUR, T, VO, SKY, shotAt, BEAT, CREDITS } from './story.js';
 import { makePost } from './post.js';
 import { makeSea } from './sea.js';
 import { buildWorld } from './world.js';
+import { NATIVE, W, H, FX, FY, S, setFrame, FILM_META } from './film.js';
 
-const W = 1920, H = 1080, QS = new URLSearchParams(location.search);
+const QS = new URLSearchParams(location.search);
 const SSAA = +(QS.get('ssaa') ?? 2);
+// 输出尺寸 = 视口尺寸（渲染器截的是浏览器**视口**，不是 canvas）：画布与 #ov 跟视口走，
+// 否则 `--size/--ratio` 只会把 1920×1080 的画面裁掉一块；版面由 cam() 的正交重取景与 hud() 的 FX/FY/S 重排给出。
+setFrame(window.innerWidth || NATIVE.W, window.innerHeight || NATIVE.H);
 const renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true });
 renderer.setPixelRatio(1); renderer.setSize(W, H);
 renderer.toneMapping = THREE.NeutralToneMapping; renderer.toneMappingExposure = 1.0;
@@ -75,18 +79,26 @@ function cam(t) {
       fh = lerp(17, 19, dn) * Math.pow(420 / 19, zz); hzA = lerp(lerp(.1, .0, dn), -.02, z); hzB = lerp(lerp(.52, .36, dn), .3, z); tiltB = lerp(.3, .5, z);
     }
   }
-  const D = Math.max(300, fh * 3), ce = Math.cos(el * DEG);   // 相机要足够远：正交画面下缘的视线起点不能落到海面以下
+  // 正交重取景：**水平世界范围恒等于设计帧**（fw 与画幅无关 ⇒ 竖屏不裁水平方向），竖直范围 fhh 随画幅变
+  // ⇒ 竖屏上下多看到天空与海；世界内容等于「设计帧等比装入并居中」（16:9 时 fhh = fh，逐字节不变）。
+  // hz0/hz1 是世界空间量（用设计帧的 fh），不随画幅变：地平线的落点会自动落在等比装入后的位置。
+  const fw = fh * NATIVE.W / NATIVE.H, fhh = fw * H / W;
+  // 相机要足够远：正交画面下缘的视线起点不能落到海面以下。★ 竖于 16:9 时竖直范围更大（fhh > fh），
+  // 下缘会伸到相机背后 ⇒ 几何被裁、露出天空（下缘一条色带）。判据用整数比较（H·1920 > W·1080），
+  // 16:9 时恒为假 ⇒ D 与原式逐位相同；D 只影响裁剪面与 camDist，而着色器用的是 vz − camDist（不随 D 变）⇒ 不改画面。
+  const D = Math.max(300, fh * 3, (H * NATIVE.W > W * NATIVE.H) ? fhh / (2 * Math.sin(el * DEG)) + 200 : 0), ce = Math.cos(el * DEG);
   camera.position.set(tg[0] + D * ce * Math.sin(az * DEG), tg[1] + D * Math.sin(el * DEG), tg[2] + D * ce * Math.cos(az * DEG));
   camera.up.set(0, 1, 0); camera.lookAt(tg[0], tg[1], tg[2]);
-  const fw = fh * W / H; camera.left = -fw / 2; camera.right = fw / 2; camera.top = fh / 2; camera.bottom = -fh / 2; camera.near = 1; camera.far = D + fh * 5 + 800; camera.updateProjectionMatrix();
+  camera.left = -fw / 2; camera.right = fw / 2; camera.top = fhh / 2; camera.bottom = -fhh / 2; camera.near = 1; camera.far = D + fh * 5 + 800; camera.updateProjectionMatrix();
   const cot = 1 / Math.tan(el * DEG);
   post.comp.camDist.value = D; post.comp.hz0.value = hzA * fh * cot; post.comp.hz1.value = hzB * fh * cot;
   post.tilt.fy.value = tiltF; post.tilt.band.value = tiltB;
-  CAM = { tg, az, el, fh, name };
+  CAM = { tg, az, el, fh, fw, fhh, name };
 }
 
-// —— 2D 层：片名、字幕、片尾 ——
+// —— 2D 层：片名、字幕、片尾（贴当前帧：位置 ×FX/×FY、尺寸 ×S）——
 const ov = document.getElementById('ov'), g = ov.getContext('2d');
+ov.width = W; ov.height = H;   // 覆盖层画布 = 当前帧（16:9 时即 1920×1080）
 let DURS = {};
 try { const r = await fetch('voices/dur.json'); if (r.ok) DURS = await r.json(); } catch (e) { }
 const voDur = v => DURS[v.id] ?? v.text.length * .065;
@@ -111,48 +123,48 @@ function spaced(text, x, y, track, align = 'center') {   // 手动字距
 }
 function titleBlock(t, t0, y, alpha, rise = true) {
   const TXT = 'THE ISLAND THAT GREW';
-  g.save(); g.globalAlpha = alpha; g.font = '600 78px "Josefin Sans"'; g.textBaseline = 'alphabetic'; g.textAlign = 'left';
-  const pos = spaced(TXT, W / 2, y, 16);
-  g.save(); g.beginPath(); g.rect(0, 0, W, y + 14); g.clip();
+  g.save(); g.globalAlpha = alpha; g.font = `600 ${78 * S}px "Josefin Sans"`; g.textBaseline = 'alphabetic'; g.textAlign = 'left';
+  const pos = spaced(TXT, W / 2, y, 16 * S);
+  g.save(); g.beginPath(); g.rect(0, 0, W, y + 14 * S); g.clip();
   [...TXT].forEach((ch, i) => {
     const s = t - (t0 + i * .055); if (rise && s < 0) return;
-    const off = rise ? (s < .28 ? 110 * Math.pow(1 - s / .28, 2) : -Math.sin((s - .28) * 14) * Math.exp(-(s - .28) * 8) * 10) : 0;
-    g.shadowColor = 'rgba(20,40,70,.35)'; g.shadowBlur = 18; g.shadowOffsetY = 4; g.fillStyle = '#ffffff'; g.fillText(ch, pos[i], y + off);
+    const off = rise ? (s < .28 ? 110 * Math.pow(1 - s / .28, 2) : -Math.sin((s - .28) * 14) * Math.exp(-(s - .28) * 8) * 10) * S : 0;
+    g.shadowColor = 'rgba(20,40,70,.35)'; g.shadowBlur = 18 * S; g.shadowOffsetY = 4 * S; g.fillStyle = '#ffffff'; g.fillText(ch, pos[i], y + off);
   });
   g.restore();
   // 水线
-  const wl = rise ? ss(seg(t, t0, t0 + .8)) : 1; g.strokeStyle = 'rgba(255,255,255,.7)'; g.lineWidth = 2;
-  g.beginPath(); g.moveTo(W / 2 - 330 * wl, y + 22); g.lineTo(W / 2 + 330 * wl, y + 22); g.stroke();
-  g.font = '300 34px "Josefin Sans"'; g.fillStyle = 'rgba(255,255,255,.92)'; g.shadowColor = 'rgba(20,40,70,.3)'; g.shadowBlur = 10;
+  const wl = rise ? ss(seg(t, t0, t0 + .8)) : 1; g.strokeStyle = 'rgba(255,255,255,.7)'; g.lineWidth = 2 * S;
+  g.beginPath(); g.moveTo(W / 2 - 330 * S * wl, y + 22 * S); g.lineTo(W / 2 + 330 * S * wl, y + 22 * S); g.stroke();
+  g.font = `300 ${34 * S}px "Josefin Sans"`; g.fillStyle = 'rgba(255,255,255,.92)'; g.shadowColor = 'rgba(20,40,70,.3)'; g.shadowBlur = 10 * S;
   const sa = rise ? ss(seg(t, t0 + 1.3, t0 + 1.9)) : 1; g.globalAlpha = alpha * sa;
-  const p2 = spaced('a low-poly island film', W / 2, y + 74, 5); [...'a low-poly island film'].forEach((ch, i) => g.fillText(ch, p2[i], y + 74));
+  const p2 = spaced('a low-poly island film', W / 2, y + 74 * S, 5 * S); [...'a low-poly island film'].forEach((ch, i) => g.fillText(ch, p2[i], y + 74 * S));
   g.restore();
 }
 function hud(t) {
   g.clearRect(0, 0, W, H);
   if (QS.get('nohud')) return;
-  if (t >= T.title[0] && t < T.title[1] + .1) titleBlock(t, T.title[0], 330, 1 - ss(seg(t, T.title[1] - .45, T.title[1])));
+  if (t >= T.title[0] && t < T.title[1] + .1) titleBlock(t, T.title[0], 330 * FY, 1 - ss(seg(t, T.title[1] - .45, T.title[1])));
   if (t < T.end && !QS.get('poster')) {
     const v = VO.find(v => { const [a, b] = subSpan(v); return t >= a && t < b; });
     if (v) {
       const [a, b] = subSpan(v), al = ss(seg(t, a, a + .18)) * (1 - ss(seg(t, b - .2, b)));
-      g.save(); g.globalAlpha = al; g.font = '600 44px Quicksand'; g.textBaseline = 'middle'; g.textAlign = 'left';
-      const tw = g.measureText(v.text).width, x0 = W / 2 - (tw + 58) / 2, y = H - 118;
-      hexIcon(x0 + 18, y - 6, 17, iconTop(t));
-      g.shadowColor = 'rgba(15,25,45,.55)'; g.shadowBlur = 14; g.shadowOffsetY = 2; g.fillStyle = '#fffdf8'; g.fillText(v.text, x0 + 58, y + 2);
+      g.save(); g.globalAlpha = al; g.font = `600 ${44 * S}px Quicksand`; g.textBaseline = 'middle'; g.textAlign = 'left';
+      const tw = g.measureText(v.text).width, x0 = W / 2 - (tw + 58 * S) / 2, y = H - 118 * FY;
+      hexIcon(x0 + 18 * S, y - 6 * S, 17 * S, iconTop(t));
+      g.shadowColor = 'rgba(15,25,45,.55)'; g.shadowBlur = 14 * S; g.shadowOffsetY = 2 * S; g.fillStyle = '#fffdf8'; g.fillText(v.text, x0 + 58 * S, y + 2 * S);
       g.restore();
     }
   }
-  if (QS.get('poster')) titleBlock(t, 0, 190, 1, false);
+  if (QS.get('poster')) titleBlock(t, 0, 190 * FY, 1, false);
   if (t >= T.end) {
     const a = ss(seg(t, T.end, T.end + .8));
     const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, `rgba(8,12,34,${.15 * a})`); gr.addColorStop(1, `rgba(8,12,34,${.55 * a})`); g.fillStyle = gr; g.fillRect(0, 0, W, H);
-    titleBlock(t, T.end, 372, a, false);
-    g.save(); g.globalAlpha = ss(seg(t, T.end + .5, T.end + 1.2)); hexIcon(W / 2, 668, 20, '#ffc676');
-    g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#ffd89a'; g.font = '600 30px "Josefin Sans"';
-    const p = spaced('LOW-POLY ISLAND  ·  LEMO-OPUSCAR', W / 2, 738, 6); [...'LOW-POLY ISLAND  ·  LEMO-OPUSCAR'].forEach((ch, i) => { g.textAlign = 'left'; g.fillText(ch, p[i], 738); });
-    g.textAlign = 'center'; g.fillStyle = 'rgba(255,255,255,.9)'; g.font = '500 30px Quicksand'; g.fillText('LemoLab × Claude Opus 5.5', W / 2, 794);
-    g.font = '500 20px Quicksand'; g.fillStyle = 'rgba(255,255,255,.62)'; CREDITS.forEach((c, i) => g.fillText(c, W / 2, H - 92 + i * 30));
+    titleBlock(t, T.end, 372 * FY, a, false);
+    g.save(); g.globalAlpha = ss(seg(t, T.end + .5, T.end + 1.2)); hexIcon(W / 2, 668 * FY, 20 * S, '#ffc676');
+    g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#ffd89a'; g.font = `600 ${30 * S}px "Josefin Sans"`;
+    const p = spaced('LOW-POLY ISLAND  ·  LEMO-OPUSCAR', W / 2, 738 * FY, 6 * S); [...'LOW-POLY ISLAND  ·  LEMO-OPUSCAR'].forEach((ch, i) => { g.textAlign = 'left'; g.fillText(ch, p[i], 738 * FY); });
+    g.textAlign = 'center'; g.fillStyle = 'rgba(255,255,255,.9)'; g.font = `500 ${30 * S}px Quicksand`; g.fillText('LemoLab × Claude Opus 5.5', W / 2, 794 * FY);
+    g.font = `500 ${20 * S}px Quicksand`; g.fillStyle = 'rgba(255,255,255,.62)'; CREDITS.forEach((c, i) => g.fillText(c, W / 2, H - 92 * S + i * 30 * S));
     g.restore();
   }
 }
@@ -175,7 +187,7 @@ function render(t) {
   gd.vig.value = lerp(.16, .32, night);
   post.bloom.strength = lerp(.22, .5, night);
   { const f = new THREE.Vector3(); camera.getWorldDirection(f); const fl = Math.hypot(f.x, f.z) || 1; sea.U.uFwd.value.set(f.x / fl, f.z / fl); sea.U.uTgt.value.set(CAM.tg[0], CAM.tg[2]); sea.U.uSpanF.value = CAM.fh / Math.tan(CAM.el * DEG) * .5; sea.U.uNight.value = night; }
-  world.update(t, { night, amp, sea, winAmt: 1, px: CAM.fh / H, camBack: new THREE.Vector3().subVectors(camera.position, new THREE.Vector3(...CAM.tg)).normalize() });
+  world.update(t, { night, amp, sea, winAmt: 1, px: CAM.fw / W, camBack: new THREE.Vector3().subVectors(camera.position, new THREE.Vector3(...CAM.tg)).normalize() });
   post.composer.render();
   hud(t);
 }
@@ -194,11 +206,11 @@ function events() {
 }
 
 // 远方浮标：放在结尾机位画面右下（先算出那一刻的相机，再反投影到海面）
-{ cam(T.bellFar + .3); const fw = CAM.fh * W / H, R = new THREE.Vector3(), U = new THREE.Vector3(), F = new THREE.Vector3();
+{ cam(T.bellFar + .3); const fw = CAM.fw, R = new THREE.Vector3(), U = new THREE.Vector3(), F = new THREE.Vector3();
   camera.updateMatrixWorld(); R.setFromMatrixColumn(camera.matrixWorld, 0); U.setFromMatrixColumn(camera.matrixWorld, 1); camera.getWorldDirection(F);
   const p = new THREE.Vector3(...CAM.tg).addScaledVector(R, fw * .3).addScaledVector(U, -CAM.fh * .27); const k = -p.y / F.y; p.addScaledVector(F, k);
   world.BUOY_FAR[0] = p.x; world.BUOY_FAR[1] = p.z; }
-window.render = render; window.DUR = DUR; window.EV = events(); window.DBG = { camera, world, post, scene, sun, hemi };
+window.render = render; window.DUR = DUR; window.EV = events(); window.FILM = FILM_META; window.DBG = { camera, world, post, scene, sun, hemi };
 await document.fonts.load('600 78px "Josefin Sans"'); await document.fonts.load('300 34px "Josefin Sans"'); await document.fonts.load('600 44px Quicksand'); await document.fonts.load('500 30px Quicksand');
 render(parseFloat(QS.get('t') ?? '10'));
 if (QS.get('dbg')) { const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)); const out = [];

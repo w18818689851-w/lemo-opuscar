@@ -6,7 +6,11 @@ import { seal } from './seal.js';
 import * as W from './world.js';
 import { T } from './story.js';
 import { VERM } from './hero.js';
+import { W as FW, H as FH, S, OX, OY } from './comp.js';
 import { clamp, lerp, ss, eo, eio, mulberry } from '/core/lib.js';
+
+// 屏幕空间的家什（设计帧屏幕坐标）走「设计帧 → 当前帧」等比装入；1920×1080 时等于单位变换。
+const fit = A => { for (const c of [A.cw, A.cd, A.cc]) c.setTransform(S, 0, 0, S, OX, OY); };
 
 const CY = 815;                                       // 白路（江底）中线
 const walkX = t => lerp(2350, W.HERO1[0], ss(clamp((t - 35.3) / (T.bank - 35.3))));
@@ -22,7 +26,7 @@ export function render(A, t, TMP) {
 function walls(L, A, t, TMP, xf) {
   const front = closeFront(t);
   const T2 = TMP.ink;
-  for (const c of [T2.wet, T2.dry]) { c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1; c.clearRect(0, 0, 1920, 1080); c.setTransform(xf.s, 0, 0, xf.s, xf.tx, xf.ty); }
+  for (const c of [T2.wet, T2.dry]) { c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1; c.clearRect(0, 0, FW, FH); c.setTransform(xf.s, 0, 0, xf.s, xf.tx, xf.ty); }
   const R = mulberry(4);
   for (let side = -1; side <= 1; side += 2) {
     const g = 50, H = side < 0 ? 170 : 240;
@@ -55,7 +59,7 @@ function walls(L, A, t, TMP, xf) {
     c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'destination-in';
     const g2 = c.createLinearGradient(sx(1000), 0, sx(front + 320), 0); const f0 = clamp((sx(1160) - sx(1000)) / (sx(front + 320) - sx(1000) + 1)), f1 = clamp((sx(front) - sx(1000)) / (sx(front + 320) - sx(1000) + 1));
     g2.addColorStop(0, 'rgba(0,0,0,0)'); g2.addColorStop(Math.min(f0, f1 * .99), '#000'); g2.addColorStop(Math.max(f1, Math.min(f0, f1 * .99) + .001), '#000'); g2.addColorStop(1, 'rgba(0,0,0,0)');
-    c.fillStyle = g2; c.fillRect(0, 0, 1920, 1080); c.globalCompositeOperation = 'source-over';
+    c.fillStyle = g2; c.fillRect(0, 0, FW, FH); c.globalCompositeOperation = 'source-over';
   }
   for (const k of ['wet', 'dry']) { const c = A.ink[k]; c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.drawImage(TMP[k], 0, 0); c.restore(); }
   // 合拢处：水纹涟漪
@@ -83,6 +87,7 @@ function renderWalk(A, t, TMP) {
 
 let BOWBG = null;
 function renderBow(A, t) {
+  fit(A);
   const L = A.ink, t12 = Math.floor(t * 12) / 12, u = t - T.shotBow;
   if (!BOWBG) BOWBG = mountainLayer({ W: 1920, H: 1080, ridge: ridgeFn([[1500, 150, 150], [1250, 90, 130], [1800, 110, 120]], 700, 23, 20), depth: 150, tone: .12, rim: .5, mist: .8, seed: 23 });
   const z = 1 + .025 * u;
@@ -132,17 +137,19 @@ function renderScroll(A, t) {
   const ma = clamp((.85 - z) / .35);
   if (ma > 0) {
     mk2.globalAlpha = ma;
-    mk2.fillStyle = '#2f2b27'; mk2.beginPath(); mk2.rect(0, 0, 1920, 1080); mk2.rect(rx - bd, ry - bd, rw + bd * 2, rh + bd * 2); mk2.fill('evenodd');
+    mk2.fillStyle = '#2f2b27'; mk2.beginPath(); mk2.rect(0, 0, FW, FH); mk2.rect(rx - bd, ry - bd, rw + bd * 2, rh + bd * 2); mk2.fill('evenodd');
     mk2.fillStyle = '#cdc3aa'; mk2.beginPath(); mk2.rect(rx - bd, ry - bd, rw + bd * 2, rh + bd * 2); mk2.rect(rx, ry, rw, rh); mk2.fill('evenodd');
     mk2.fillStyle = '#5a4634'; mk2.fillRect(rx - bd - 26 * s * 3, ry - bd - 10, 26 * s * 3, rh + bd * 2 + 20); mk2.fillRect(rx + rw + bd, ry - bd - 10, 26 * s * 3, rh + bd * 2 + 20);   // 两端轴
     mk2.strokeStyle = 'rgba(60,48,36,.5)'; mk2.lineWidth = 1.5; mk2.strokeRect(rx - 2, ry - 2, rw + 4, rh + 4);
   }
-  // 片尾卡
+  // 片尾卡（屏幕空间家什：走设计帧 → 当前帧等比装入，字号随 S 缩放）
   const ea = clamp((t - T.endCard) / .8);
   if (ea > 0) {
+    mk2.setTransform(S, 0, 0, S, OX, OY);
     mk2.globalAlpha = ea; mk2.fillStyle = '#e8dfcc'; mk2.textAlign = 'center';
     mk2.font = '600 44px CormorantSC'; mk2.letterSpacing = '14px'; mk2.fillText('CHINESE INK WASH', 960, 870);
     mk2.font = 'italic 500 30px Cormorant'; mk2.letterSpacing = '2px'; mk2.fillText('LemoLab × Claude Opus 5.5', 960, 925);
+    mk2.setTransform(1, 0, 0, 1, 0, 0);
   }
   mk2.restore();
   return { bleed: 5 * s, rim: 1, paper: [-tx, -ty, s], vig: .22 + .15 * ma };

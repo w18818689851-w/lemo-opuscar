@@ -193,13 +193,13 @@ for vid, t0 in vo_times:
     x = resample_poly(x, SR, vsr); x = hp(x, 90); x = compress(x)
     i = int(t0 * SR); j = min(N, i + len(x)); vo[i:j] += x[:j - i]
     a = max(0, i - int(.25 * SR)); b = min(N, j + int(.4 * SR)); duck[a:b] = 1
-duck = lp(np.convolve(duck, np.ones(int(.3 * SR)) / int(.3 * SR), 'same'), 5)
+duck = lp(fftconvolve(duck, np.ones(int(.3 * SR)) / int(.3 * SR), 'same'), 5)
 act = duck > .5
 def limit(x, ceil):
     pk = maximum_filter1d(np.abs(x), int(.005 * SR)); g = np.minimum(1, ceil / (pk + 1e-9))
     g = np.minimum.reduce([g, np.roll(g, int(.0025 * SR))]); g = lp(g, 200); return x * np.clip(g, 0, 1)
 speech = np.abs(vo) > 10 ** (-40 / 20) * np.abs(vo).max()
-vr = np.sqrt(np.mean(vo[np.convolve(speech, np.ones(2400), 'same') > 0] ** 2))
+vr = np.sqrt(np.mean(vo[fftconvolve(speech, np.ones(2400), 'same') > 0] ** 2))
 vo = limit(vo, vr * 10 ** (11 / 20))
 mus_db = dbfs(mus[act]); vo_db = dbfs(vo[act])
 vo *= 10 ** ((mus_db + 8.5 - vo_db) / 20)

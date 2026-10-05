@@ -8,6 +8,15 @@ import { spawn, spawnSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+// 编码器：**未设 LEMO_VENC ⇒ 走 GPU 的 h264_nvenc**（用户硬规则：渲染一律 GPU 优先）；
+// 显式 libx264 才走 CPU；其它值报错退出，绝不静默回落 CPU（把 h264_nvenc 打错会以为在用显卡、实际走 CPU）。
+const VENC = process.env.LEMO_VENC || 'h264_nvenc';
+if (VENC !== 'h264_nvenc' && VENC !== 'libx264') { console.error(`LEMO_VENC must be h264_nvenc or libx264, or unset (which means h264_nvenc, the GPU encoder), got '${VENC}'. Refusing to fall back to the CPU encoder silently.`); process.exit(1); }
+// 编码参数：nvenc 的 cq ≈ 原 libx264 的 crf + 5；显式 libx264 时保持原参数。
+const vencArgs = (crf, preset = 'medium') => VENC === 'h264_nvenc'
+  ? ['-c:v', 'h264_nvenc', '-preset', 'p5', '-rc', 'vbr', '-cq', String(crf + 5), '-b:v', '0']
+  : ['-c:v', 'libx264', '-preset', preset, '-crf', String(crf)];
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 const P = (...a) => path.join(DIR, ...a);
 // 优先用本机 Playwright 缓存里的 headless shell；找不到就让 playwright-core 自己找（需 npx playwright install chromium-headless-shell）
@@ -21,7 +30,7 @@ const mode = args[0];
 if (mode === 'mux') {
   const outFile = path.resolve(args[1] || P('..', 'halftone-dossier.mp4'));
   const r = spawnSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', P('out', 'video_noaudio.mp4'), '-i', P('music.wav'),
-    '-map', '0:v', '-map', '1:a', '-c:v', 'libx264', '-preset', 'slow', '-crf', '16', '-pix_fmt', 'yuv420p',
+    '-map', '0:v', '-map', '1:a', ...vencArgs(16, 'slow'), '-pix_fmt', 'yuv420p',
     '-af', 'volume=-1.6dB', '-c:a', 'aac', '-b:a', '256k', '-ar', '48000', '-shortest', '-movflags', '+faststart', outFile], { stdio: 'inherit' });
   console.log(r.status === 0 ? `mux ok → ${outFile}` : 'mux failed');
   process.exit(r.status ?? 1);
@@ -58,7 +67,7 @@ if (mode === 'stills') {
     const a = w * per, b = Math.min(TOTAL, a + per);
     const page = await openPage(browser);
     const ff = spawn('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'png', '-i', '-',
-      '-c:v', 'libx264', '-preset', 'slow', '-crf', '12', '-pix_fmt', 'yuv420p', P('out', `seg_${w}.mp4`)]);
+      ...vencArgs(12, 'slow'), '-pix_fmt', 'yuv420p', P('out', `seg_${w}.mp4`)]);
     for (let f = a; f < b; f++) {
       await page.evaluate(t => window.render(t), f / FPS);
       const buf = await page.screenshot({ type: 'png' });

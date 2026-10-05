@@ -5,6 +5,7 @@ import { clamp, seg, eio, eo, ei, ss, lerp, hash } from '/core/lib.js';
 import { DUR, T, SHOTS, shotAt, KICKS, MACRO_SWEEPS, VO, BEAT, SFX } from './story.js';
 import { makeBud, makeCase, explode, setPulses, AURA_A, AURA_B, CASE } from './product.js';
 import { makeStudio } from './studio.js';
+import { NATIVE, FILM_META } from './film.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 
 const QS = new URLSearchParams(location.search), NOSUB = QS.has('nosub');
@@ -215,6 +216,13 @@ function frame(t) {
 
 // —— 2D 层：片名、字幕（磨砂玻璃条）、结尾卡 ——
 const ov = document.getElementById('ov'), g = ov.getContext('2d');
+// 输出尺寸 = 视口尺寸（渲染器截的是浏览器**视口**，不是 canvas）：本风格按设计帧 1920×1080 构图（3D 影棚 + HUD），
+// 多比例走「设计帧整体**等比装入**当前帧 + 同色留白」：整张设计帧按 S = min(FX, FY) 缩放、居中，
+// 设计帧外留背景色 #000（无限黑影棚 ⇒ 留白与画面同色，看不出黑边）；不裁切、不变形、主体与字幕完整。
+// 1920×1080 时 S = 1、偏移 0 ⇒ 不套变换，逐字节等于改造前。
+const VW = window.innerWidth || NATIVE.W, VH = window.innerHeight || NATIVE.H;
+const FS = Math.min(VW / NATIVE.W, VH / NATIVE.H), FOX = (VW - NATIVE.W * FS) / 2, FOY = (VH - NATIVE.H * FS) / 2;
+if (FS !== 1 || FOX || FOY) for (const el of [renderer.domElement, ov]) { el.style.transformOrigin = '0 0'; el.style.transform = `translate(${FOX}px,${FOY}px) scale(${FS})`; }
 let DURS = {};
 try { const r = await fetch('voices/dur.json'); if (r.ok) DURS = await r.json(); } catch (e) { }
 const voDur = v => DURS[v.id] ?? v.text.length * .065;
@@ -304,6 +312,7 @@ window.render = t => {
   hud(t);
 };
 window.DUR = DUR;
+window.FILM = FILM_META;
 window.EV = [...SFX, ...VO.map(v => ({ t: v.t, type: 'vo', id: v.id, text: v.text }))];
 // 字幕（与烧录同一份数据）：显示区间 = max(1.9 s, 语音 + 0.7 s)
 window.SUBS = VO.map(v => ({ t0: v.t, t1: v.t + Math.max(1.9, voDur(v) + .7), text: v.text }));

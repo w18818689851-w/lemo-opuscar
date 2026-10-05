@@ -9,10 +9,11 @@ import { drawFounderBack } from './views.js';
 import * as IN from './interior.js';
 import * as FX from './fx.js';
 import { part, drawPart, put, mul, T, R, S } from './rig.js';
+import { W, H as FH } from './stage.js';   // 当前帧宽 / 帧高（FH：本文件 register() 的形参已叫 H，不能撞名）
 import { founderHands, boyCompass } from './hands.js';
 const CUT_C = 31.9167, K_ = { click: 32.3333 }, CMP = {};   // the compass insert opens inside the silence
 
-const W = 1920, H = 1080, PI = Math.PI;
+const PI = Math.PI;
 const { m, c, IMG } = ST;
 const st12 = t => Math.floor(t * 12) / 12;          // characters step on twos
 const FLIP = (k, x, y) => [-k, 0, 0, k, x, y], NORM = (k, x, y) => [k, 0, 0, k, x, y];
@@ -373,7 +374,7 @@ export function register(SHOTS, H) {
   function PAPER() {
     if (PAPERC) return PAPERC;
     m.setTransform(1, 0, 0, 1, 0, 0); m.fillStyle = '#fff'; m.fillRect(0, 0, W, H); c.clearRect(0, 0, W, H);
-    const out = H.X().printer.render(ST.M, ST.C, { seed: 13 }); const [cv, q] = WC.canvas(); q.drawImage(out, 0, 0); return PAPERC = cv;
+    const out = H.X().printer.render(ST.M, ST.C, { seed: 13 }); const [cv, q] = WC.canvas(W, FH); q.drawImage(out, 0, 0); return PAPERC = cv;
   }
   function ropeFist(m, rx, cy, k, who, close) {
     const L = WC.light(.6, -.5, .45), sk = { white: true, outline: 4.5 * k, sp: 4.5, R: 26 * k, amb: who === 'B' ? .22 : .08, lo: .45, halo: 6, light: L };

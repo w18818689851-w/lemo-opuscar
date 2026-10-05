@@ -3,7 +3,13 @@
 // 2) line boil：屏幕空间按 ~7px 重采样，沿法向做低频噪声位移；BOIL 状态 12fps 在 3 张之间循环
 // 3) 平涂：fill → clip 内画硬边阴影块 → 最后描边
 import { clamp, lerp, hash, vnoise, TAU } from '/core/lib.js';
-export const W = 1920, H = 1080;
+// 帧尺寸不是常量：渲染器截的是浏览器**视口**，`--size/--ratio` 会改它。NATIVE 是设计帧（1920×1080）。
+// 页面首行按实际帧调 setFrame()：位置按轴拉伸（×FX/×FY）、尺寸按紧轴缩放（×S）、相机缩放 ×S。
+// 1920×1080 时 FX = FY = S = 1，每个表达式退化成它替换掉的那个数字 ⇒ 16:9 逐字节不变。
+// 顶层不许算几何：W/H 只在 setFrame() 里被赋值。
+export const NATIVE = { W: 1920, H: 1080 };
+export let W = NATIVE.W, H = NATIVE.H, FX = 1, FY = 1, S = 1;
+export function setFrame(w, h) { W = w; H = h; FX = w / NATIVE.W; FY = h / NATIVE.H; S = Math.min(FX, FY); }
 export const INK = '#1b1422';
 export let g = null;
 export function init(canvas) { g = canvas.getContext('2d'); return g; }
@@ -23,9 +29,10 @@ export const getM = () => M.slice();
 export const setM = m => { M = m.slice(); };
 
 // —— 全局状态（每帧设置）——
-export const S = { boil: 0, amp: 1.7, sid: 0, lw: 7, lwScale: 1 };
+// 原名 S，与上面派生的紧轴缩放 S 重名 → 改名 SB（旧名在别处只是 import，未实际使用）。
+export const SB = { boil: 0, amp: 1.7, sid: 0, lw: 7, lwScale: 1 };
 export function frame(t, { amp = 1.7 } = {}) {
-  S.boil = Math.floor(t * 12 + 1e-6) % 3; S.amp = amp; S.sid = 0; reset();
+  SB.boil = Math.floor(t * 12 + 1e-6) % 3; SB.amp = amp; SB.sid = 0; reset();
   g.setTransform(1, 0, 0, 1, 0, 0);
 }
 
@@ -115,25 +122,25 @@ function pathOf(s, closed) {
 }
 // 主绘制：返回 Path2D（可再用来 clip / 描边）
 export function shape(pts, o = {}) {
-  const closed = o.closed !== false, id = S.sid++;
-  const seed = hash(id * 1.37 + 3) * 90 + S.boil * 23.7;
+  const closed = o.closed !== false, id = SB.sid++;
+  const seed = hash(id * 1.37 + 3) * 90 + SB.boil * 23.7;
   let s = toScreen(pts, closed);
-  s = boilPts(s, closed, (o.boil ?? 1) * S.amp, seed);
+  s = boilPts(s, closed, (o.boil ?? 1) * SB.amp, seed);
   const P = pathOf(s, closed);
   g.setTransform(1, 0, 0, 1, 0, 0);
   if (o.alpha != null) g.globalAlpha = o.alpha;
   if (o.fill && closed) { g.fillStyle = o.fill; g.fill(P); }
   if (o.shade) { g.save(); g.clip(P); o.shade(); g.restore(); }
-  if (o.stroke !== false && o.line !== null) outline(P, o.lw ?? S.lw, o.line ?? INK);
+  if (o.stroke !== false && o.line !== null) outline(P, o.lw ?? SB.lw, o.line ?? INK);
   if (o.alpha != null) g.globalAlpha = 1;
   return P;
 }
-export function outline(P, lw = S.lw, col = INK) {
+export function outline(P, lw = SB.lw, col = INK) {
   g.setTransform(1, 0, 0, 1, 0, 0);
-  g.lineWidth = lw * S.lwScale; g.lineJoin = 'round'; g.lineCap = 'round'; g.strokeStyle = col; g.stroke(P);
+  g.lineWidth = lw * SB.lwScale; g.lineJoin = 'round'; g.lineCap = 'round'; g.strokeStyle = col; g.stroke(P);
 }
 export const fillOnly = (pts, fill, o = {}) => shape(pts, { ...o, fill, stroke: false });
-export const stroke = (pts, lw = S.lw, o = {}) => shape(pts, { ...o, closed: false, lw });
+export const stroke = (pts, lw = SB.lw, o = {}) => shape(pts, { ...o, closed: false, lw });
 export const dot = (x, y, r, col = INK) => { const [a, b] = tx(x, y); g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = col; g.beginPath(); g.arc(a, b, Math.max(1.5, r * zoom()), 0, TAU); g.fill(); };
 
 // 世界坐标里写字（招牌等）

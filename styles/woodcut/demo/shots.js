@@ -1,6 +1,7 @@
 // The Bell Founder — shots. Each shot: { t0, t1, draw(g, t, lt), events(K) }
 import * as WC from './engine/index.js';
 import * as ST from './stage.js';
+import { W, H } from './stage.js';       // 当前帧尺寸（stage.setFrame() 定的活绑定；1920×1080 时即设计帧）
 import { clamp, lerp, seg, ss, eio, eo, ei, mulberry } from '/core/lib.js';
 import { buildWorld, drawValley, snowAt, PW, PH, HOR, TOWER, BELFRY } from './world.js';
 import { curl, peelState } from './trans.js';
@@ -8,7 +9,7 @@ import { captionAt } from './film.js';
 import { drawFounder, FOUNDER_POSE, drawBoy, BOY_POSE, drawCompass } from './chars.js';
 import * as FX from './fx.js';
 
-const W = 1920, H = 1080, PI = Math.PI;
+const PI = Math.PI;
 const { m, c, IMG } = ST;
 let X = null, K = null;
 export const SHOTS = [];
@@ -122,7 +123,7 @@ function paperTex() {   // blank laid paper = the print shader with nothing carv
   if (PAPER) return PAPER;
   m.setTransform(1, 0, 0, 1, 0, 0); m.fillStyle = '#fff'; m.fillRect(0, 0, W, H); c.clearRect(0, 0, W, H);
   const out = X.printer.render(ST.M, ST.C, { seed: 11 });
-  const [cv, q] = WC.canvas(); q.drawImage(out, 0, 0); PAPER = cv; return cv;
+  const [cv, q] = WC.canvas(W, H); q.drawImage(out, 0, 0); PAPER = cv; return cv;
 }
 function walkers(m, t) {
   const st = Math.floor(t * 12) / 12, ph = Math.floor(t * 3) % 2, wx = 610 + (st - 9) * 14;
@@ -152,7 +153,7 @@ function brayer(tg, x) {
   tg.restore();
 }
 function rubMask(tg, t) {   // how much of the image shows through the back of the sheet, grown by baren circles
-  const [cv, q] = X.rub || (X.rub = WC.canvas());
+  const [cv, q] = X.rub || (X.rub = WC.canvas(W, H));
   q.setTransform(1, 0, 0, 1, 0, 0); q.clearRect(0, 0, W, H);
   // ink soaks through a little as soon as the sheet lies down; the baren's soft spiral rubs it fully through
   q.fillStyle = `rgba(0,0,0,${.22 + .1 * seg(t, 7.67, 8.0)})`; q.fillRect(0, 0, W, H);
@@ -173,7 +174,7 @@ function barenPath(t) {
 function paperBack(tg, t, full = false) {    // the back of the sheet with the image showing through (mirrored print)
   const [fb, fq] = X.frontCv;
   tg.drawImage(paperTex(), 0, 0);
-  const [sb, sq] = X.showCv || (X.showCv = WC.canvas());
+  const [sb, sq] = X.showCv || (X.showCv = WC.canvas(W, H));
   sq.globalCompositeOperation = 'source-over'; sq.clearRect(0, 0, W, H);
   sq.save(); sq.setTransform(-1, 0, 0, 1, W, 0); sq.drawImage(fb, 0, 0); sq.restore();
   if (!full) { sq.globalCompositeOperation = 'destination-in'; sq.drawImage(rubMask(null, t), 0, 0); sq.globalCompositeOperation = 'source-over'; }
@@ -183,7 +184,7 @@ SHOTS.push({
   t0: 7.0, t1: 9.0,
   draw(g, t) {
     buildOpen();
-    X.frontCv = X.frontCv || WC.canvas();
+    X.frontCv = X.frontCv || WC.canvas(W, H);
     if (!X.frontDone) { firstPrintTo(X.frontCv[1], 9); X.frontDone = true; }
     const cam = openCam(Math.min(t, 7.6));
     const wetX = t < 7.6 ? lerp(-60, W + 60, seg(t, 7.0, 7.6)) : W + 200;

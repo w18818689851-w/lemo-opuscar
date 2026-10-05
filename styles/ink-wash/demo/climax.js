@@ -6,7 +6,12 @@ import { wave } from './wave.js';
 import { ridgeFn, mountainLayer, ripple } from './land.js';
 import { shuiStrokes, cutStroke, tipAt } from './glyph.js';
 import { T } from './story.js';
+import { S, OX, OY } from './comp.js';
 import { clamp, lerp, ss, eo, eio, mulberry } from '/core/lib.js';
+
+// 本文件按**设计帧屏幕坐标**画：套一层「设计帧 → 当前帧」等比装入（坐标/线宽/字号一起 ×S 并居中）。
+// 1920×1080 时等于 setTransform(1,0,0,1,0,0) ⇒ 逐字节不变。离屏 BG/WV 仍是设计尺寸，随变换一起缩放。
+const fit = A => { for (const c of [A.cw, A.cd, A.cc]) c.setTransform(S, 0, 0, S, OX, OY); };
 
 let WV = null, BG = null, TM = null;
 const BOX = [300, 110, 520];
@@ -35,6 +40,7 @@ export function render(A, t, TMP) {
 
 // 笠檐大特写：看不见眼睛，一滴水从笠檐落下
 function renderECU(A, t) {
+  fit(A);
   const u = (t - T.cut5) / (T.shot5b - T.cut5), z = 1 + .03 * u;
   for (const c of [A.cw, A.cd, A.cc]) { c.save(); c.translate(960, 540); c.scale(z, z); c.translate(-960, -540); }
   face(A.ink, 'calm', { x: 1000, y: 560, s: 9.5, seed: 3, hatY: -9, hide: true, drop: t < T.drop5 ? -1 : clamp((t - T.drop5) / (T.drip5 - T.drop5)) });
@@ -43,6 +49,7 @@ function renderECU(A, t) {
 }
 
 function renderWrite(A, t) {
+  fit(A);
   const L = A.ink, t12 = Math.floor(t * 12) / 12;
   const push = t < T.hush ? 1 : 1 + .05 * ss((t - T.hush) / (T.cut - T.hush));
   const after = t - T.cut, k = clamp((t - T.cutEnd) / 2.3);            // 劈开进度：飞白扫完才裂开

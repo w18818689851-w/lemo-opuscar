@@ -5,6 +5,7 @@ import { TR, outerR, wedgeFlat, D4 } from './tuanhua.js';
 import { drawScissors } from './girl.js';
 import { clamp, seg, ss, lerp, eio, eo, back, hash, track } from '/core/lib.js';
 import { T as TL } from './story.js';
+import { W, H, S as FS, fcanvas, wdX, wdY } from './film.js';
 
 const FRONT = PAL.red, BACK = '#de3b30';
 const Kx = 2.2, Q = Math.PI / 4;
@@ -35,11 +36,11 @@ function stack(g, M, poly, n) {
   for (let i = n; i >= 1; i--) { g.save(); g.setTransform(...M); g.translate(i * 1.1, i * 1.4); g.beginPath(); trace(g, poly); g.fillStyle = i % 2 ? '#9c1418' : '#b51a1c'; g.fill(); g.restore(); }
 }
 // 翻起的纸：沿法线分 16 条，每条按抬起高度做近大远小（伪透视），画进离屏再整体投影
-const [Fc, Fg] = canvas(1920, 1080);
+const [Fc, Fg] = fcanvas();
 function flap(g, C, n, s, poly, face) {
   const tv = [-n[1], n[0]], ds = poly.map(p => p[0] * n[0] + p[1] * n[1]), D = Math.max(...ds.map(Math.abs)), sg = Math.sign(ds.reduce((a, b) => Math.abs(b) > Math.abs(a) ? b : a, 0)) || 1;
   const lift = Math.sqrt(Math.max(0, 1 - s * s)), N = 16;
-  Fg.setTransform(1, 0, 0, 1, 0, 0); Fg.clearRect(0, 0, 1920, 1080);
+  Fg.setTransform(1, 0, 0, 1, 0, 0); Fg.clearRect(0, 0, W, H);
   for (let i = 0; i < N; i++) {
     const d0 = sg * D * i / N - sg * .6, d1 = sg * D * (i + 1) / N + sg * .6, dm = (d0 + d1) / 2;
     const sc = 1 + .28 * Math.abs(dm) / TR * lift;
@@ -87,16 +88,16 @@ export function camFold(t) {
   let [x, y, z] = camK(t);
   if (t > TL.cut0 && t < TL.cut1 + .4) { const { p } = pathAt(cutU(t)), k = .32 * Math.min(seg(t, TL.cut0, TL.cut0 + .4), 1 - seg(t, TL.cut1, TL.cut1 + .4)); x = lerp(x, p[0], k); y = lerp(y, p[1], k); }
   if (t > TL.bloom - .05) { const u = t - TL.bloom; z *= 1 + .07 * Math.exp(-u * 5) * Math.sin(Math.min(u * 14, Math.PI)); }
-  return [z, 0, 0, z, 960 - x * z, 540 - y * z];
+  return [z * FS, 0, 0, z * FS, W / 2 - x * z * FS, H / 2 - y * z * FS];
 }
-const [Mc, Mg] = canvas(1920, 1080);
+const [Mc, Mg] = fcanvas();
 export function drawFold(g, t) {
   build();
   const C = camFold(t), z = C[0];
   // 桌面：宣纸 + 烛光暖晕
-  g.save(); g.setTransform(1, 0, 0, 1, 0, 0); fillPaper(g, 'rice', 0, 0, 1920, 1080, [z * .9, 0, 0, z * .9, C[4], C[5]]);
-  const gr = g.createRadialGradient(560, 300, 100, 900, 560, 1400); gr.addColorStop(0, 'rgba(255,200,120,.10)'); gr.addColorStop(1, 'rgba(60,20,10,.45)');
-  g.fillStyle = gr; g.fillRect(0, 0, 1920, 1080); g.restore();
+  g.save(); g.setTransform(1, 0, 0, 1, 0, 0); fillPaper(g, 'rice', 0, 0, W, H, [z * .9, 0, 0, z * .9, C[4], C[5]]);
+  const gr = g.createRadialGradient(wdX(560), wdY(300), 100, wdX(900), wdY(560), 1400); gr.addColorStop(0, 'rgba(255,200,120,.10)'); gr.addColorStop(1, 'rgba(60,20,10,.45)');
+  g.fillStyle = gr; g.fillRect(0, 0, W, H); g.restore();
   const [f1, f2, f3] = TL.folds, D = .55;
   const scraps = [];
   if (t < f1) layer(g, C, [[-TR, -TR], [TR, -TR], [TR, TR], [-TR, TR]], 'front', { shadow: 1 });
@@ -127,7 +128,7 @@ export function drawFold(g, t) {
     g.save(); g.setTransform(...C); g.beginPath(); trace(g, TRI); g.clip(); paperShadow(g, z, 1);
     g.filter = 'brightness(.62)'; for (let i = 3; i >= 1; i--) g.drawImage(F.wBack.c, F.wBack.x0 + i * 1.1 / z, F.wBack.y0 + i * 1.4 / z, F.wBack.w, F.wBack.h);
     g.filter = 'none'; g.drawImage(F.wBack.c, F.wBack.x0, F.wBack.y0, F.wBack.w, F.wBack.h); g.restore();
-    Mg.setTransform(1, 0, 0, 1, 0, 0); Mg.globalCompositeOperation = 'source-over'; Mg.clearRect(0, 0, 1920, 1080);
+    Mg.setTransform(1, 0, 0, 1, 0, 0); Mg.globalCompositeOperation = 'source-over'; Mg.clearRect(0, 0, W, H);
     stack(Mg, C, TRI, 4);
     Mg.save(); Mg.setTransform(...C); Mg.beginPath(); trace(Mg, TRI); Mg.clip(); Mg.drawImage(F.back.c, F.back.x0, F.back.y0, F.back.w, F.back.h); Mg.restore(); Mg.setTransform(...C);
     Mg.globalCompositeOperation = 'destination-out'; Mg.fillStyle = '#000'; Mg.beginPath();
@@ -192,5 +193,5 @@ function drawUnfold(g, C, t) {
     g.save(); g.setTransform(...M); paperShadow(g, C[0], 1 + 4 * (1 - Math.abs(c.s)));
     g.drawImage(w.c, w.x0, w.y0, w.w, w.h); g.restore();
   }
-  if (bloomHi > 0) { g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'lighter'; const gr = g.createRadialGradient(960, 540, 0, 960, 540, 700); gr.addColorStop(0, `rgba(255,210,150,${bloomHi})`); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 1920, 1080); g.restore(); }
+  if (bloomHi > 0) { g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'lighter'; const gr = g.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, 700 * FS); gr.addColorStop(0, `rgba(255,210,150,${bloomHi})`); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, W, H); g.restore(); }
 }

@@ -5,7 +5,7 @@ set -e
 cd "$(dirname "$0")/../../.."
 PY=.venv/bin/python; D=styles/engraving/demo; O=styles/engraving; C=${1:-content.json}
 # 1. voice lines from the content file → Kokoro (bm_fable, en-gb) → whisper check
-$PY -c "import json,sys; c=json.load(open('$D/$C')); v=c['voice']; json.dump([dict(id=l['id'],text=l['text'],voice=v['voice'],speed=v.get('speed',.92),lang='en-gb',**({'asr':l['asr']} if 'asr' in l else {})) for l in v['lines']], open('$D/lines.json','w'), indent=1)"
+$PY -c "import json,sys; c=json.load(open('$D/$C')); v=c['voice']; json.dump([dict(id=l['id'],text=l['text'],voice=v['voice'],speed=v.get('speed',.92),lang=v.get('lang','en-gb'),**({'asr':l['asr']} if 'asr' in l else {})) for l in v['lines']], open('$D/lines.json','w'), indent=1)"
 $PY core/tts/tts.py $D/lines.json $D/voices
 $PY core/tts/asr_check.py $D/lines.json $D/voices
 # 2. original baroque score → music/score.wav + stems

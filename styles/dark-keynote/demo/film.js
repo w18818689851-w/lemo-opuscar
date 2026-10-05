@@ -1,9 +1,19 @@
 // film.js — 《Room to Think》装配：混乱世界 → 收拢 → 光的揭幕 → 大数字 → 呼吸 → 回响
 import * as E from './engine.js';
+import { W, H, FX, FY, S, NATIVE, setFrame } from './engine.js';   // 活绑定：setFrame() 改 W/H/FX/FY/S
 import { K, DUR, S16, typeTimes, voice1, voice2, voice3, voiceClean } from './timeline.js';
 import { RING, CARET_HOME, SCR, NOTE, TXT, CARET_H, CAM0, pullZoom, camCenter, items, poseAt, snap, SLOTS, TILE, sorted, TW, ST, groupOf } from './world.js';
-const { W, H, PAL, clamp, lerp, seg, ss, eo, ei, eio, back, spring, hash, TAU, font, rr } = E;
+const { PAL, clamp, lerp, seg, ss, eo, ei, eio, back, spring, hash, TAU, font, rr } = E;
 export { DUR };
+
+// 影片元数据：aspects 是**字面量**（lib/aspects.mjs 按源码文本正则探测，不写 = 只支持 16:9）。
+// 已适配多比例：版面从视口（opts.W/opts.H）重排 —— 见 renderFilm 首行的 setFrame()。
+export const FILM_META = {
+  id: 'room-to-think',
+  title: 'Room to Think',
+  style: 'Dark Tech Keynote',
+  aspects: ['16:9', '9:16'],
+};
 
 // ───────────────── 片名打字 ─────────────────
 const TITLE = typeTimes(K.typeStart, K.title);
@@ -243,7 +253,7 @@ function sceneMess(g, t) {
   // 冻结时的聚光：只让光标亮着
   const spot = ss(seg(t, K.freeze, K.freeze + 0.6)) * (1 - ss(seg(t, K.press, K.press + 0.15)));
   if (spot > 0 && cpos) {
-    const pr = cam.proj(cpos.x, cpos.y), gr = g.createRadialGradient(pr.x, pr.y, 120, pr.x, pr.y, 900);
+    const pr = cam.proj(cpos.x, cpos.y), gr = g.createRadialGradient(pr.x, pr.y, 120 * S, pr.x, pr.y, 900 * S);
     gr.addColorStop(0, 'rgba(4,5,8,0)'); gr.addColorStop(1, `rgba(4,5,8,${0.55 * spot})`); g.fillStyle = gr; g.fillRect(0, 0, W, H);
   }
   // 漏光：被埋时的青柠光（叠加）
@@ -262,7 +272,7 @@ function sceneMess(g, t) {
     const a = t - K.press, cw = caretWorld(), pr = cam.proj(cw.x, cw.y), R = a * RING * pr.s;
     g.save(); g.globalCompositeOperation = 'lighter';
     const fade = 1 - ss(seg(a, 0.35, 0.9));
-    g.strokeStyle = E.rgba(PAL.accent, 0.85 * fade); g.lineWidth = 3 + 10 * (1 - fade); g.shadowColor = E.rgba(PAL.accent, fade); g.shadowBlur = 40;
+    g.strokeStyle = E.rgba(PAL.accent, 0.85 * fade); g.lineWidth = (3 + 10 * (1 - fade)) * S; g.shadowColor = E.rgba(PAL.accent, fade); g.shadowBlur = 40 * S;
     g.beginPath(); g.arc(pr.x, pr.y, R, 0, TAU); g.stroke(); g.shadowColor = 'transparent';
     const gr = g.createRadialGradient(pr.x, pr.y, Math.max(0, R - 220 * pr.s), pr.x, pr.y, R);
     gr.addColorStop(0, E.rgba(PAL.accent, 0)); gr.addColorStop(1, E.rgba(PAL.accent, 0.1 * fade));
@@ -305,33 +315,36 @@ function sceneMess(g, t) {
 // ───────────────── 插入镜头（12.0 – 13.5） ─────────────────
 function insertScene(g, k, lt) {
   E.bg(g, { lift: 1.2, cool: 0.6 });
-  E.grid(g, { ox: 960, oy: 540, scale: 1.4, alpha: 0.8 });
+  E.grid(g, { ox: W / 2, oy: H / 2, scale: 1.4, alpha: 0.8 });
   const push = 1 + lt * 0.12;
   g.save(); g.translate(W / 2, H / 2); g.scale(push, push); g.translate(-W / 2, -H / 2);
   if (k === 0) {        // 999+ 角标
-    E.appIcon(g, W / 2 - 170, H / 2 - 170, 340, 4);
+    E.appIcon(g, W / 2 - 170 * S, H / 2 - 170 * S, 340 * S, 4);
     const n = Math.min(999, Math.floor(lerp(640, 999, eo(lt / 0.3))));
-    E.badge(g, W / 2 + 150, H / 2 - 150, n >= 999 ? '999+' : String(n), 6.2);
+    E.badge(g, W / 2 + 150 * S, H / 2 - 150 * S, n >= 999 ? '999+' : String(n), 6.2 * S);
   } else if (k === 1) { // 标签页细成线
-    const tabs = Math.floor(lerp(60, 150, lt / 0.5)), x0 = 120, w = W - 240, tw = w / tabs;
-    E.panel(g, 90, 250, W - 180, 600, { r: 32, fill: PAL.surf });
-    for (let i = 0; i < tabs; i++) { g.fillStyle = i === tabs - 1 ? PAL.surf3 : 'rgba(255,255,255,.08)'; rr(g, x0 + i * tw, 290, Math.max(1, tw - 3), 110, Math.min(12, tw / 3)); g.fill(); if (tw > 20) E.appIcon(g, x0 + i * tw + 4, 330, Math.min(30, tw - 8), i); }
-    g.fillStyle = 'rgba(255,255,255,.06)'; rr(g, 150, 440, W - 300, 70, 35); g.fill();
-    g.fillStyle = PAL.text; g.font = font(120, 600, 'disp'); g.textBaseline = 'alphabetic'; g.fillText(String(tabs), 170, 740);
-    const nw = g.measureText(String(tabs)).width; g.fillStyle = PAL.dim; g.font = font(56, 500, 'ui'); g.fillText('tabs open', 200 + nw, 740);
+    const tabs = Math.floor(lerp(60, 150, lt / 0.5)), x0 = 120 * FX, w = W - 240 * FX, tw = w / tabs;
+    E.panel(g, 90 * FX, 250 * FY, W - 180 * FX, 600 * FY, { r: 32 * S, fill: PAL.surf });
+    for (let i = 0; i < tabs; i++) { g.fillStyle = i === tabs - 1 ? PAL.surf3 : 'rgba(255,255,255,.08)'; rr(g, x0 + i * tw, 290 * FY, Math.max(1, tw - 3 * S), 110 * FY, Math.min(12 * S, tw / 3)); g.fill(); if (tw > 20 * S) E.appIcon(g, x0 + i * tw + 4 * S, 330 * FY, Math.min(30 * S, tw - 8 * S), i); }
+    g.fillStyle = 'rgba(255,255,255,.06)'; rr(g, 150 * FX, 440 * FY, W - 300 * FX, 70 * FY, 35 * S); g.fill();
+    g.fillStyle = PAL.text; g.font = font(120 * S, 600, 'disp'); g.textBaseline = 'alphabetic'; g.fillText(String(tabs), 170 * FX, 740 * FY);
+    const nw = g.measureText(String(tabs)).width; g.fillStyle = PAL.dim; g.font = font(56 * S, 500, 'ui'); g.fillText('tabs open', 200 * FX + nw, 740 * FY);
   } else {              // 存储条变红
     const p = lerp(0.9, 0.995, eo(lt / 0.4));
-    E.storageBar(g, 220, 580, W - 440, 52, p, { label: 'Storage almost full', value: `${((1 - p) * 40).toFixed(1)} GB left` });
+    E.storageBar(g, 220 * FX, 580 * FY, W - 440 * FX, 52 * S, p, { label: 'Storage almost full', value: `${((1 - p) * 40).toFixed(1)} GB left` });
   }
   g.restore(); E.vignette(g, 0.5);
 }
 
 // ───────────────── 产品段（19.5 – 26） ─────────────────
+// 把世界窗口中心 (960,540) 落到**当前帧**屏幕点 (cxS,cyS)、zoom 取设计倍数 z 的相机。
+// 16:9 时退化成 `{x:960, y:540+(540-cyS)/z}`，与原式逐位相同。
+const camAt = (cxS, cyS, z) => E.camera({ x: 960 - (cxS - W / 2) / (z * S), y: 540 - (cyS - H / 2) / (z * S), zoom: z });
 function winPose(t) {
-  // 返回 {cx, cy, s, rotY, bright}
-  if (t < K.reveal) { const u = eio(seg(t, K.dim, K.reveal)); return { cx: 960, cy: lerp(540, 515, u), s: lerp(0.78, 0.76, u), rotY: lerp(0, -0.42, u), bright: 1 - 0.93 * ss(seg(t, K.dim, K.dim + 0.35)) }; }
+  // 返回 {cx, cy, s, rotY, bright}；cx/cy 是**当前帧**屏幕坐标（16:9 时 W/2=960、H/2=540）
+  if (t < K.reveal) { const u = eio(seg(t, K.dim, K.reveal)); return { cx: W / 2, cy: lerp(H / 2, 515 * FY, u), s: lerp(0.78, 0.76, u), rotY: lerp(0, -0.42, u), bright: 1 - 0.93 * ss(seg(t, K.dim, K.dim + 0.35)) }; }
   const u = seg(t, K.reveal, K.rotZero), e = 1 - Math.pow(1 - u, 2.4);
-  return { cx: 960, cy: lerp(515, 505, e), s: lerp(0.76, 0.8, e), rotY: lerp(-0.42, 0, e), bright: 1 };
+  return { cx: W / 2, cy: lerp(515 * FY, 505 * FY, e), s: lerp(0.76, 0.8, e), rotY: lerp(-0.42, 0, e), bright: 1 };
 }
 function drawWindowWorld(g, t, o = {}) {
   drawSurface(g, 1);
@@ -348,30 +361,30 @@ function sceneProduct(g, t) {
   const sweepP = clamp((t - K.reveal) / 1.3);
   // 背景里的斜光带（跟光扫同步）
   if (t > K.reveal - 0.2 && t < K.reveal + 2.4) {
-    const x = lerp(-600, W + 600, eio(clamp((t - K.reveal + 0.1) / 1.9)));
+    const x = lerp(-600 * S, W + 600 * S, eio(clamp((t - K.reveal + 0.1) / 1.9)));
     g.save(); g.globalCompositeOperation = 'lighter'; g.translate(x, H / 2); g.rotate(0.62);
-    const gr = g.createLinearGradient(-300, 0, 300, 0); gr.addColorStop(0, 'rgba(200,215,255,0)'); gr.addColorStop(0.5, 'rgba(200,215,255,.045)'); gr.addColorStop(1, 'rgba(200,215,255,0)');
-    g.fillStyle = gr; g.fillRect(-300, -1400, 600, 2800); g.restore();
+    const gr = g.createLinearGradient(-300 * S, 0, 300 * S, 0); gr.addColorStop(0, 'rgba(200,215,255,0)'); gr.addColorStop(0.5, 'rgba(200,215,255,.045)'); gr.addColorStop(1, 'rgba(200,215,255,0)');
+    g.fillStyle = gr; g.fillRect(-300 * S, -1400, 600 * S, 2800); g.restore();
   }
   // 窗口背后的柔光晕 + 地面柔光
-  E.glow(g, P.cx, P.cy - 40, 1100 * P.s, '#6F82C8', 0.10 * clamp(sweepP * 1.5));
-  E.glow(g, P.cx, P.cy + P.s * 560, 900 * P.s, '#8CA0FF', 0.05 * clamp(sweepP * 2));
+  E.glow(g, P.cx, P.cy - 40 * S, 1100 * P.s * S, '#6F82C8', 0.10 * clamp(sweepP * 1.5));
+  E.glow(g, P.cx, P.cy + P.s * 560 * S, 900 * P.s * S, '#8CA0FF', 0.05 * clamp(sweepP * 2));
   const [wc, wg] = E.buf('win', 1920, 1080);
   wg.clearRect(0, 0, 1920, 1080);
   drawWindowWorld(wg, t, { base: (x, y) => [1, 0, 0, 1, x, y], checksAll: false });
   wg.setTransform(1, 0, 0, 1, 0, 0);
   // 先把（不透明的）窗口透视投到屏幕缓冲，再在屏幕空间里做光扫：光是扫过整个场景的
   const [pc, pg] = E.buf('persp', W, H); pg.clearRect(0, 0, W, H);
-  const map = E.perspective(pg, wc, P.cx, P.cy, 1920 * P.s, 1080 * P.s, P.rotY, { slices: 160 });
+  const map = E.perspective(pg, wc, P.cx, P.cy, 1920 * P.s * S, 1080 * P.s * S, P.rotY, { slices: 160 });
   g.save();
   if (t < K.reveal) { g.globalAlpha = P.bright; g.drawImage(pc, 0, 0); }
-  else E.lightReveal(g, pc, 0, 0, W, H, sweepP, { base: 0.07, soft: 700, band: 360, glint: 0.2 });
+  else E.lightReveal(g, pc, 0, 0, W, H, sweepP, { base: 0.07, soft: 700 * S, band: 360 * S, glint: 0.2 });
   g.restore();
   // 边缘高光（光扫经过时窗口边一亮）
   if (t >= K.reveal && sweepP < 1) {
     const [a, b] = [map(0, 0), map(1, 0)]; g.save(); g.globalCompositeOperation = 'lighter';
     const gr = g.createLinearGradient(a[0], 0, b[0], 0), f = sweepP; gr.addColorStop(clamp(f - 0.15), 'rgba(255,255,255,0)'); gr.addColorStop(clamp(f), 'rgba(255,255,255,.55)'); gr.addColorStop(clamp(f + 0.05), 'rgba(255,255,255,0)');
-    g.strokeStyle = gr; g.lineWidth = 2; g.beginPath(); g.moveTo(...a); g.lineTo(...b); g.stroke(); g.restore();
+    g.strokeStyle = gr; g.lineWidth = 2 * S; g.beginPath(); g.moveTo(...a); g.lineTo(...b); g.stroke(); g.restore();
   }
   E.vignette(g, 0.55);
 }
@@ -386,9 +399,9 @@ function sceneFront(g, t, cam, o = {}) {
   g.setTransform(1, 0, 0, 1, 0, 0);
   E.vignette(g, 0.55);
 }
-const DIG = { x: 58, y: 1080 - 28 + 1 };
+const DIG = { x: 58, y: 1080 - 28 + 1 };   // 世界坐标（状态栏里的数字）
 function camPushNum(t) {
-  const P = winPose(K.rotZero), g0 = { x: 960, y: 540 + (540 - P.cy) / P.s };
+  const P = winPose(K.rotZero), g0 = camAt(P.cx, P.cy, P.s);
   const u = ei(seg(t, K.pushNum, K.num));
   const tgt = { x: DIG.x + 34, y: DIG.y };
   return E.camera({ x: lerp(g0.x, tgt.x, ss(seg(t, K.pushNum, K.num - 0.3))), y: lerp(g0.y, tgt.y, ss(seg(t, K.pushNum, K.num - 0.3))), zoom: Math.exp(lerp(Math.log(P.s), Math.log(16), u)) });
@@ -398,46 +411,47 @@ function camPushNum(t) {
 function sceneNumber(g, t) {
   E.bg(g, { lift: 1, cool: 0.8 });
   const lt = t - K.num, pull = 1.035 - 0.035 * eo(clamp(lt / 3.5));
-  E.grid(g, { ox: 960, oy: 540, scale: pull, alpha: 0.7 });
-  E.glow(g, 960, 480, 760, '#8CA0FF', 0.05);
+  E.grid(g, { ox: W / 2, oy: H / 2, scale: pull, alpha: 0.7 });
+  E.glow(g, W / 2, 480 * FY, 760 * S, '#8CA0FF', 0.05);
   g.save(); g.translate(W / 2, H / 2); g.scale(pull, pull); g.translate(-W / 2, -H / 2);
   // 量出整行宽度，居中
-  g.font = font(360, 600, 'disp'); if (g.letterSpacing !== undefined) g.letterSpacing = '0px';
-  const trk = -0.045 * 360; let nw = 0; for (const c of '12,408') nw += g.measureText(c).width + trk; nw -= trk;
-  g.font = font(120, 500, 'disp'); const fw = g.measureText('files.').width;
-  const total = nw + 40 + fw, x0 = W / 2 - total / 2, base = 560;
+  g.font = font(360 * S, 600, 'disp'); if (g.letterSpacing !== undefined) g.letterSpacing = '0px';
+  const trk = -0.045 * 360 * S; let nw = 0; for (const c of '12,408') nw += g.measureText(c).width + trk; nw -= trk;
+  g.font = font(120 * S, 500, 'disp'); const fw = g.measureText('files.').width;
+  const total = nw + 40 * S + fw, x0 = W / 2 - total / 2, base = 560 * FY;
   // 顶部标签
-  g.font = font(22, 600, 'mono'); g.fillStyle = PAL.mute; if (g.letterSpacing !== undefined) g.letterSpacing = '5px';
-  g.globalAlpha = ss(seg(t, K.num + 0.1, K.num + 0.5)); g.fillText('TIDY  ·  FIRST RUN', x0 + 8, base - 300); g.globalAlpha = 1;
+  g.font = font(22 * S, 600, 'mono'); g.fillStyle = PAL.mute; if (g.letterSpacing !== undefined) g.letterSpacing = `${5 * S}px`;
+  g.globalAlpha = ss(seg(t, K.num + 0.1, K.num + 0.5)); g.fillText('TIDY  ·  FIRST RUN', x0 + 8 * S, base - 300 * S); g.globalAlpha = 1;
   if (g.letterSpacing !== undefined) g.letterSpacing = '0px';
   // 12,408（从右往左锁）
   const locks = [K.locks[4], K.locks[3], K.locks[2], K.locks[2], K.locks[1], K.locks[0]];
-  E.scramble(g, '12,408', x0, base, t, locks, { px: 360, wt: 600, fam: 'disp', color: '#F1F3F7', tracking: -0.045 });
+  E.scramble(g, '12,408', x0, base, t, locks, { px: 360 * S, wt: 600, fam: 'disp', color: '#F1F3F7', tracking: -0.045 });
   const fa = seg(t, K.files, K.files + 0.22);
-  if (fa > 0) { g.globalAlpha = fa; g.font = font(120, 500, 'disp'); g.fillStyle = PAL.dim; g.fillText('files.', x0 + nw + 40, base - (1 - eo(fa)) * 18); g.globalAlpha = 1; }
+  if (fa > 0) { g.globalAlpha = fa; g.font = font(120 * S, 500, 'disp'); g.fillStyle = PAL.dim; g.fillText('files.', x0 + nw + 40 * S, base - (1 - eo(fa)) * 18 * S); g.globalAlpha = 1; }
   // Sorted in 0.8 seconds. + 0–1 s 标尺
   const la = seg(t, K.line2, K.line2 + 0.3);
   if (la > 0) {
-    g.globalAlpha = eo(la); const y = base + 170 + (1 - eo(la)) * 18;
-    g.font = font(84, 500, 'ui'); const parts = [['Sorted in ', PAL.text], ['0.8', PAL.accent], [' seconds.', PAL.text]];
+    g.globalAlpha = eo(la); const y = base + 170 * S + (1 - eo(la)) * 18 * S;
+    g.font = font(84 * S, 500, 'ui'); const parts = [['Sorted in ', PAL.text], ['0.8', PAL.accent], [' seconds.', PAL.text]];
     let lw = 0; parts.forEach(([s]) => lw += g.measureText(s).width); let x = W / 2 - lw / 2;
-    parts.forEach(([s, c]) => { g.fillStyle = c; if (c === PAL.accent) { g.shadowColor = E.rgba(PAL.accent, 0.55); g.shadowBlur = 34; } g.fillText(s, x, y); g.shadowColor = 'transparent'; x += g.measureText(s).width; });
+    parts.forEach(([s, c]) => { g.fillStyle = c; if (c === PAL.accent) { g.shadowColor = E.rgba(PAL.accent, 0.55); g.shadowBlur = 34 * S; } g.fillText(s, x, y); g.shadowColor = 'transparent'; x += g.measureText(s).width; });
     // 标尺：0 ——— 1 s，青柠段长到 0.8
-    const rx = W / 2 - 360, rw = 720, ry = y + 92, fill = eo(seg(t, K.line2 + 0.1, K.line2 + 0.9));
-    g.fillStyle = 'rgba(255,255,255,.12)'; g.fillRect(rx, ry, rw, 2);
-    for (let i = 0; i <= 10; i++) { g.fillStyle = `rgba(255,255,255,${i % 5 ? 0.12 : 0.3})`; g.fillRect(rx + rw * i / 10 - 0.5, ry - (i % 5 ? 6 : 12), 1, i % 5 ? 6 : 12); }
-    g.fillStyle = PAL.accent; g.shadowColor = E.rgba(PAL.accent, 0.8); g.shadowBlur = 14; g.fillRect(rx, ry - 1, rw * 0.8 * fill, 4); g.shadowColor = 'transparent';
-    g.font = font(18, 500, 'mono'); g.fillStyle = PAL.mute; g.textAlign = 'center'; g.fillText('0 s', rx, ry + 36); g.fillText('1 s', rx + rw, ry + 36);
-    g.fillStyle = PAL.accent; g.globalAlpha *= clamp((fill - 0.95) * 20); g.fillText('0.8', rx + rw * 0.8, ry + 36); g.textAlign = 'left';
+    const rx = W / 2 - 360 * S, rw = 720 * S, ry = y + 92 * S, fill = eo(seg(t, K.line2 + 0.1, K.line2 + 0.9));
+    g.fillStyle = 'rgba(255,255,255,.12)'; g.fillRect(rx, ry, rw, 2 * S);
+    for (let i = 0; i <= 10; i++) { g.fillStyle = `rgba(255,255,255,${i % 5 ? 0.12 : 0.3})`; g.fillRect(rx + rw * i / 10 - 0.5 * S, ry - (i % 5 ? 6 : 12) * S, 1 * S, (i % 5 ? 6 : 12) * S); }
+    g.fillStyle = PAL.accent; g.shadowColor = E.rgba(PAL.accent, 0.8); g.shadowBlur = 14 * S; g.fillRect(rx, ry - 1 * S, rw * 0.8 * fill, 4 * S); g.shadowColor = 'transparent';
+    g.font = font(18 * S, 500, 'mono'); g.fillStyle = PAL.mute; g.textAlign = 'center'; g.fillText('0 s', rx, ry + 36 * S); g.fillText('1 s', rx + rw, ry + 36 * S);
+    g.fillStyle = PAL.accent; g.globalAlpha *= clamp((fill - 0.95) * 20); g.fillText('0.8', rx + rw * 0.8, ry + 36 * S); g.textAlign = 'left';
     g.globalAlpha = 1;
   }
   g.restore(); E.vignette(g, 0.5);
 }
 
 // ───────────────── 呼吸（29.5 – 33）与回响（33 – 42） ─────────────────
-const END_CARET = { x: 479, y: 535, h: CARET_H * 4.81, px: TXT.px * 4.81 };
+// 片尾光标：位置/尺寸按当前帧重排（16:9 时 W/2=960、H/2=540、S=1 ⇒ 与原值逐位相同）
+const endCaret = () => ({ x: 479 * FX, y: 535 * FY, h: CARET_H * 4.81 * S, px: TXT.px * 4.81 * S });
 function sceneBreath(g, t) {
-  const P = winPose(K.rotZero), g0 = { x: 960, y: 540 + (540 - P.cy) / P.s };
+  const P = winPose(K.rotZero), g0 = camAt(P.cx, P.cy, P.s);
   if (t < K.retract[0]) {           // 大字收回状态栏
     const u = eo(seg(t, K.numBack, K.retract[0]));
     return sceneFront(g, t, E.camera({ x: lerp(DIG.x + 34, g0.x, u), y: lerp(DIG.y, g0.y, u), zoom: Math.exp(lerp(Math.log(16), Math.log(P.s), u)) }));
@@ -448,51 +462,52 @@ function sceneBreath(g, t) {
     const its = items();
     sceneFront(g, t, E.camera({ x: g0.x, y: g0.y, zoom: push }), { out });
     const rim = ss(seg(t, K.retract[4], K.retract[4] + 0.3));
-    if (rim > 0) { const cam = E.camera({ x: g0.x, y: g0.y, zoom: push }), a = cam.proj(0, 0), b = cam.proj(1920, 1080); g.save(); g.strokeStyle = E.rgba(PAL.accent, 0.7 * rim); g.lineWidth = 2; g.shadowColor = E.rgba(PAL.accent, rim); g.shadowBlur = 24; rr(g, a.x, a.y, b.x - a.x, b.y - a.y, 26 * a.s); g.stroke(); g.restore(); }
+    if (rim > 0) { const cam = E.camera({ x: g0.x, y: g0.y, zoom: push }), a = cam.proj(0, 0), b = cam.proj(1920, 1080); g.save(); g.strokeStyle = E.rgba(PAL.accent, 0.7 * rim); g.lineWidth = 2 * S; g.shadowColor = E.rgba(PAL.accent, rim); g.shadowBlur = 24 * S; rr(g, a.x, a.y, b.x - a.x, b.y - a.y, 26 * a.s); g.stroke(); g.restore(); }
     return;
   }
   // 窗口 → 线 → 光标：真窗口竖向压扁（越扁越亮、越偏青柠），再收成光标
   E.bg(g, { lift: 0.9, cool: 0.7 });
-  const cam = E.camera({ x: g0.x, y: g0.y, zoom: push });
+  const EC = endCaret(), cam = E.camera({ x: g0.x, y: g0.y, zoom: push });
   const c = cam.proj(960, 540), ww = 1920 * c.s, hh = 1080 * c.s;
   // 三步：竖向压成线（显像管关机）→ 线横向收成一个点 → 点竖着长成光标
   const u1 = ei(seg(t, K.toCaret, K.toCaret + 0.22)), u2a = eio(seg(t, K.toCaret + 0.22, K.toCaret + 0.38)), u2b = eio(seg(t, K.toCaret + 0.36, K.silence2));
   const u2 = Math.max(u2a, 1e-6 * (t > K.toCaret + 0.22));
-  const w = lerp(ww, END_CARET.h / 14, u2a), h = u2a < 1 ? lerp(hh, 5, u1) : lerp(5, END_CARET.h, u2b);
-  const x = lerp(c.x, END_CARET.x, u2a), y = lerp(c.y, END_CARET.y, u2a);
+  const w = lerp(ww, EC.h / 14, u2a), h = u2a < 1 ? lerp(hh, 5 * S, u1) : lerp(5 * S, EC.h, u2b);
+  const x = lerp(c.x, EC.x, u2a), y = lerp(c.y, EC.y, u2a);
   if (u2 <= 0) {
     const [wc, wg] = E.buf('win', 1920, 1080); wg.clearRect(0, 0, 1920, 1080);
     const its = items();
     drawWindowWorld(wg, t, { base: (px, py) => [1, 0, 0, 1, px, py], checksAll: true, out: [1, 1, 1, 1] }); wg.setTransform(1, 0, 0, 1, 0, 0);
     wg.strokeStyle = E.rgba(PAL.accent, 0.7); wg.lineWidth = 3; rr(wg, 1.5, 1.5, 1917, 1077, 26); wg.stroke();
     g.save(); g.drawImage(wc, x - w / 2, y - h / 2, w, h);
-    g.globalCompositeOperation = 'lighter'; g.globalAlpha = ss(seg(u1, 0.55, 1)); g.fillStyle = E.rgba(PAL.accent, 0.9); rr(g, x - w / 2, y - h / 2, w, h, lerp(26 * c.s, 2, u1)); g.fill();
-    if (u1 > 0.5) E.glow(g, x, y, 260, PAL.accent, 0.3 * (u1 - 0.5));
+    g.globalCompositeOperation = 'lighter'; g.globalAlpha = ss(seg(u1, 0.55, 1)); g.fillStyle = E.rgba(PAL.accent, 0.9); rr(g, x - w / 2, y - h / 2, w, h, lerp(26 * c.s, 2 * S, u1)); g.fill();
+    if (u1 > 0.5) E.glow(g, x, y, 260 * S, PAL.accent, 0.3 * (u1 - 0.5));
     g.restore();
   } else E.caret(g, x, y, Math.max(h, w), { sx: w / (Math.max(h, w) / 14), sy: h / Math.max(h, w), glow: 0.6 + 0.4 * u2b });
   E.vignette(g, 0.5);
 }
 function sceneEnd(g, t) {
   E.bg(g, { lift: 0.9, cool: 0.7 });
+  const EC = endCaret();
   const st = t < K.echo ? 1 : t < K.echoType ? blinkOn(t - K.echo) : t < typedEnd() ? 1 : t < K.caretOff ? blinkOn(t - K.echo) : 0;
   const ta = 1 - ss(seg(t, K.endFade, K.endFade + 0.6));
-  g.font = font(END_CARET.px, 500); g.fillStyle = PAL.text; g.textBaseline = 'alphabetic';
-  const s = typed(ECHO, t), base = END_CARET.y + 11 * 4.81;
-  g.globalAlpha = ta; g.fillText(s, END_CARET.x - 3 * 4.81, base); g.globalAlpha = 1;
-  const cx = t < K.endFade ? END_CARET.x + g.measureText(s).width : lerp(END_CARET.x + g.measureText(s).width, END_CARET.x, eio(seg(t, K.endFade + 0.2, K.endFade + 0.8)));
-  E.caret(g, cx, END_CARET.y, END_CARET.h, { on: st, glow: 1 });
+  g.font = font(EC.px, 500); g.fillStyle = PAL.text; g.textBaseline = 'alphabetic';
+  const s = typed(ECHO, t), base = EC.y + 11 * 4.81 * S;
+  g.globalAlpha = ta; g.fillText(s, EC.x - 3 * 4.81 * S, base); g.globalAlpha = 1;
+  const cx = t < K.endFade ? EC.x + g.measureText(s).width : lerp(EC.x + g.measureText(s).width, EC.x, eio(seg(t, K.endFade + 0.2, K.endFade + 0.8)));
+  E.caret(g, cx, EC.y, EC.h, { on: st, glow: 1 });
   // 片尾信息
   const ea = ss(seg(t, K.endCard, K.endCard + 0.6)) * ta;
   if (ea > 0) {
-    g.globalAlpha = ea; const x = END_CARET.x - 3 * 4.81; let y = base + 120;
-    g.font = font(34, 600); g.fillStyle = PAL.text; g.fillText('Room to Think', x, y);
-    g.font = font(22, 500, 'mono'); g.fillStyle = PAL.dim;
-    g.font = font(24, 500, 'mono'); g.fillText('a launch film for Tidy, a fictional app', x + 280, y);
-    y += 56; g.fillStyle = PAL.dim; g.fillText('Dark Tech Keynote  ·  Lemo-Opuscar', x, y);
-    y += 38; g.fillText('LemoLab × Claude Opus 5.5', x, y);
-    y += 54; g.font = font(19, 500, 'mono'); g.fillStyle = PAL.mute;
+    g.globalAlpha = ea; const x = EC.x - 3 * 4.81 * S; let y = base + 120 * S;
+    g.font = font(34 * S, 600); g.fillStyle = PAL.text; g.fillText('Room to Think', x, y);
+    g.font = font(22 * S, 500, 'mono'); g.fillStyle = PAL.dim;
+    g.font = font(24 * S, 500, 'mono'); g.fillText('a launch film for Tidy, a fictional app', x + 280 * S, y);
+    y += 56 * S; g.fillStyle = PAL.dim; g.fillText('Dark Tech Keynote  ·  Lemo-Opuscar', x, y);
+    y += 38 * S; g.fillText('LemoLab × Claude Opus 5.5', x, y);
+    y += 54 * S; g.font = font(19 * S, 500, 'mono'); g.fillStyle = PAL.mute;
     g.fillText('Voice: Kokoro af_kore (Apache-2.0)  ·  Marimba / vibraphone / glockenspiel: VCSL (CC0)', x, y);
-    y += 30; g.fillText('Type: Inter, Inter Tight, JetBrains Mono (OFL)  ·  All UI, music and sound are original', x, y);
+    y += 30 * S; g.fillText('Type: Inter, Inter Tight, JetBrains Mono (OFL)  ·  All UI, music and sound are original', x, y);
     g.globalAlpha = 1;
   }
   E.vignette(g, 0.5);
@@ -512,6 +527,7 @@ function drawSubs(g, t) {
 
 // ───────────────── 总装 ─────────────────
 export function renderFilm(g, t, o = {}) {
+  setFrame(o.W ?? NATIVE.W, o.H ?? NATIVE.H);   // 帧尺寸由调用方（视口）定，版面随之重排
   g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; g.filter = 'none';
   if (t < K.dim) {
     sceneMess(g, t);
@@ -520,10 +536,10 @@ export function renderFilm(g, t, o = {}) {
     if (ki >= 0) {
       const lt = t - K.inserts[ki], [ic, ig] = E.buf('insert');
       insertScene(ig, ki, lt);
-      const src = [[330, 690], [1010, 250], [1400, 900]][ki];
+      const src = [[330 * FX, 690 * FY], [1010 * FX, 250 * FY], [1400 * FX, 900 * FY]][ki];
       const pin = eo(clamp((lt + 0.042) / 0.1)), pout = ki === 2 ? ei(clamp((lt - 0.4) / 0.1)) : 0, p = pin * (1 - pout);
-      const w = lerp(160, W, p), h = lerp(90, H, p), x = lerp(src[0] - 80, 0, p), y = lerp(src[1] - 45, 0, p);
-      g.save(); rr(g, x, y, w, h, lerp(18, 0, p)); g.clip(); g.drawImage(ic, x, y, w, h); g.restore();
+      const w = lerp(160 * S, W, p), h = lerp(90 * S, H, p), x = lerp(src[0] - 80 * S, 0, p), y = lerp(src[1] - 45 * S, 0, p);
+      g.save(); rr(g, x, y, w, h, lerp(18 * S, 0, p)); g.clip(); g.drawImage(ic, x, y, w, h); g.restore();
     }
   } else if (t < K.rotZero) sceneProduct(g, t);
   else if (t < K.num) sceneFront(g, t, camPushNum(t));

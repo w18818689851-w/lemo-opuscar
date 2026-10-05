@@ -2,17 +2,32 @@
 // 世界坐标 → 屏幕坐标经 CAM；线条宽度按屏幕像素（每帧都是"重新画"的一张画，笔粗不随镜头缩放太多）。
 // BOIL.step = floor(t*12)：每 2 帧（24fps 下）换一次抖动种子 = 线条沸腾。
 import { clamp, lerp, hash, vnoise } from '/core/lib.js';
-export const W = 1920, H = 1080;
+// 帧尺寸不是常量：渲染器截的是浏览器**视口**，`--size/--ratio` 会改它。NATIVE 是设计帧（1920×1080）。
+// main.js 把视口尺寸交给 film.frame()，frame() 首行调 setFrame() 重排版面：
+//   位置按轴拉伸（×FX/×FY）、尺寸/线宽按紧轴缩放（×S）、相机 CAM.s ×S（世界按紧轴缩小、仍居中）。
+// 1920×1080 时 FX = FY = S = 1、偏移 0，每个表达式退化成它替换掉的那个数字 ⇒ 16:9 逐字节不变。
+// 顶层不许算几何：W/H 只在 setFrame() 里被赋值。
+export const NATIVE = { W: 1920, H: 1080 };
+export let W = NATIVE.W, H = NATIVE.H, FX = 1, FY = 1, S = 1, OX = 0, OY = 0;
+const _layers = [];                  // setFrame() 里按当前帧重设尺寸的层（模块加载期建的层也覆盖到）
+export function setFrame(w, h) {
+  W = w; H = h; FX = w / NATIVE.W; FY = h / NATIVE.H; S = Math.min(FX, FY);
+  OX = (w - NATIVE.W * S) / 2; OY = (h - NATIVE.H * S) / 2;
+  for (const L of _layers) if (L.c.width !== W || L.c.height !== H) { L.c.width = W; L.c.height = H; L.g.lineCap = 'round'; L.g.lineJoin = 'round'; }
+}
+// 设计帧(1920×1080) → 当前帧的「等比装入」：屏幕空间的家什（书页、结束卡…）也走它才能与相机里的世界对齐。
+export const fitX = x => OX + S * x;
+export const fitY = y => OY + S * y;
 export const CAM = { x: 960, y: 540, s: 1 };
 export const BOIL = { step: 0, amp: 1 };
 export const WMUL = { k: 1 };        // 全局线宽倍数（设定表大特写时可调）
 
-export function layer() { const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d'); g.lineCap = 'round'; g.lineJoin = 'round'; return { c, g }; }
+export function layer() { const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d'); g.lineCap = 'round'; g.lineJoin = 'round'; const L = { c, g }; _layers.push(L); return L; }
 export function clear(L) { L.g.setTransform(1, 0, 0, 1, 0, 0); L.g.clearRect(0, 0, W, H); }
 
 export const sx = x => (x - CAM.x) * CAM.s + W / 2;
 export const sy = y => (y - CAM.y) * CAM.s + H / 2;
-export const ws = w => w * Math.pow(CAM.s, 0.45) * WMUL.k;      // 屏幕线宽：轻微随镜头变化
+export const ws = w => w * Math.pow(CAM.s, 0.45) * WMUL.k * S;  // 屏幕线宽：轻微随镜头变化，整体随紧轴缩放
 const n1 = (seed, x) => vnoise(x + seed * 17.31) * 2 - 1;
 
 // 把世界坐标折线转屏幕、按屏幕距离重采样
@@ -111,9 +126,9 @@ export function fill(L, poly, o = {}) {
     prev = s;
   }
   // 总长度，用于涂色进度
-  const paths = strokes.map((S, si) => {
+  const paths = strokes.map((SG, si) => {
     const pts = [];
-    S.forEach(([s, yy, rr], k) => {
+    SG.forEach(([s, yy, rr], k) => {
       const len = s[1] - s[0];
       const oA = over * (hash(seed + rr * 5.1 + 0.3) * 1.1 - 0.15) - Math.min(0, len * 0) , oB = over * (hash(seed + rr * 2.3 + 0.7) * 1.1 - 0.15);
       const yj = (hash(seed + rr * 1.7 + st * 0.31 * ba) - .5) * gap * 0.35 * Math.max(ba, .3);

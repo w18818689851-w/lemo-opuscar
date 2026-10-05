@@ -11,6 +11,21 @@ export const eio = t => { t = clamp(t); return t < .5 ? 4 * t * t * t : 1 - Math
 export const back = (t, s = 1.7) => { t = clamp(t) - 1; return 1 + t * t * ((s + 1) * t + s); };
 export const hash = n => { n = Math.sin(n * 127.1 + 311.7) * 43758.5453; return n - Math.floor(n); };
 
+// ---------- 帧尺寸 ----------
+// 渲染器截的是浏览器**视口**（page.screenshot），`--size WxH` / `--ratio` 会改它，所以画布必须跟着视口走。
+// NATIVE 是设计帧（1920×1080）。render() 首行按实际帧调 setFrame()，版面从帧重推：
+// 位置按轴拉伸（×FX/×FY）、尺寸按紧轴缩放（×S）、**相机 zoom ×S**（等价于把设计帧等比装入当前帧）。
+// 1920×1080 时 FX = FY = S = 1，每个表达式退化成它替换掉的那个数字 ⇒ 16:9 逐字节不变。
+// 顶层不许算几何：W/H 只在 setFrame() 里被赋值。
+// ★ 命名冲突：world.js 有自己的常量 `S`（棋盘边长 240），hero.js 的 palm/pinch 里有局部 `S`（三档色），
+//   所以那两个子模块把这里的 S 以 `import { S as FS }` 引入（见 MAINTAINING.md「让影片支持多比例」陷阱一）。
+export const NATIVE = { W: 1920, H: 1080 };
+export let W = NATIVE.W, H = NATIVE.H, FX = 1, FY = 1, S = 1;
+export function setFrame(w, h) { W = w; H = h; FX = w / NATIVE.W; FY = h / NATIVE.H; S = Math.min(FX, FY); }
+// 设计帧(1920×1080) → 当前帧的**等比装入**变换：屏幕空间的成组家具（片名卡 / 圆形插图 / 片尾卡…）
+// 走它才能和相机里的世界内容对齐。1920×1080 时 S=1、偏移 0 ⇒ 与 setTransform(1,0,0,1,0,0) 逐位相同。
+export function designXf(g) { g.setTransform(S, 0, 0, S, (W - NATIVE.W * S) / 2, (H - NATIVE.H * S) / 2); }
+
 // ---------- colour ----------
 const _rgb = {};
 export function rgb(c) {
@@ -37,8 +52,8 @@ export const PAL = {
 
 // ---------- the engine ----------
 export class Iso {
-  constructor(g, W = 1920, H = 1080) {
-    this.g = g; this.W = W; this.H = H;
+  constructor(g, w = W, h = H) {
+    this.g = g; this.W = w; this.H = h;
     this.cam = { x: 0, y: 0, z: 0, k: 10 };
     this.items = []; this.T = null; this.stack = [];
     this.desat = 0; this.keep = false; this.alpha = 1; this.seq = 0;
@@ -62,7 +77,7 @@ export class Iso {
   L(x, y, z) { const [a, b, c] = this.w(x, y, z); return this.P(a, b, c); } // local → screen
   // inverse of P on plane z
   unP(sx, sy, z = 0) { const c = this.cam, k = c.k; const u = (sx - this.W / 2) / (C30 * k), v = (sy - this.H / 2) / k + (z - c.z); const X = v + u / 2, Y = v - u / 2; return [X + c.x, Y + c.y]; }
-  vis(x, y, z, r) { const [sx, sy] = this.P(x, y, z), R = r * this.cam.k * 1.2 + 4; return sx > -R && sx < this.W + R && sy > -R && sy < this.H + R; }
+  vis(x, y, z, r) { const [sx, sy] = this.P(x, y, z), R = r * this.cam.k * 1.2 + 4 * S; return sx > -R && sx < this.W + R && sy > -R && sy < this.H + R; }
   // ---- colour pipeline (desaturation with one-colour exception) ----
   col(c, a = 1) {
     let r = rgb(c);
@@ -256,69 +271,73 @@ export function haloText(g, s, x, y, o = {}) {
   g.fillStyle = o.color || PAL.ink; g.fillText(s, x, y); const w = g.measureText(s).width; g.restore(); return w;
 }
 // label pin: dot on the object → vertical leader → horizontal rule → title / number / icon row.  a ∈ [0,1] reveal
+// 锚点来自 iso.P（已随相机缩到当前帧）；引线长度/字号/圆点/间距都是**设计像素**，一律 ×S 才与缩小的世界成比例。
 export function pin(iso, x, y, z, o = {}) {
   const g = iso.g, a = o.a ?? 1; if (a <= 0) return;
-  const [ax, ay] = iso.P(x, y, z), up = o.up ?? 130, dir = o.dir ?? 1, len = o.len ?? 60;
+  const [ax, ay] = iso.P(x, y, z), up = (o.up ?? 130) * S, dir = o.dir ?? 1, len = (o.len ?? 60) * S;
   const s1 = eo(seg(a, 0, .18)), s2 = eo(seg(a, .12, .42)), s3 = eo(seg(a, .36, .55)), s4 = seg(a, .45, 1);
   g.save(); g.globalAlpha = o.fade ?? 1;
-  g.strokeStyle = PAL.ink; g.lineWidth = 2; g.lineCap = 'round';
+  g.strokeStyle = PAL.ink; g.lineWidth = 2 * S; g.lineCap = 'round';
   // leader
   if (s2 > 0) { g.beginPath(); g.moveTo(ax, ay); g.lineTo(ax, ay - up * s2); if (s3 > 0) g.lineTo(ax + dir * len * s3, ay - up); g.stroke(); }
   // dot
-  const R = 7 * back(s1, 2.2); g.beginPath(); g.arc(ax, ay, Math.max(0, R), 0, TAU); g.fillStyle = PAL.paper; g.fill(); g.stroke();
+  const R = 7 * S * back(s1, 2.2); g.beginPath(); g.arc(ax, ay, Math.max(0, R), 0, TAU); g.fillStyle = PAL.paper; g.fill(); g.stroke();
   g.beginPath(); g.arc(ax, ay, Math.max(0, R * .42), 0, TAU); g.fillStyle = o.dot || PAL.ink; g.fill();
   // text
   if (s4 > 0) {
-    const tx = ax + dir * (len + 12), ty = ay - up;
-    g.save(); g.beginPath(); const wv = 900 * ss(s4); if (dir > 0) g.rect(tx - 4, ty - 80, wv, 220); else g.rect(tx + 4 - wv, ty - 80, wv, 220); g.clip();
-    const al = dir > 0 ? 'left' : 'right', ns = o.ns || 44, uf = `500 ${Math.round(ns * .5)}px ${FONT}`;
-    haloText(g, o.title || '', tx, ty - 10, { font: `600 ${o.ts || 25}px ${FONT}`, track: 3.5, align: al });
-    let uw = 0; if (o.unit) { g.font = uf; g.letterSpacing = '2px'; uw = g.measureText(o.unit).width + 10; g.letterSpacing = '0px'; }
+    const tx = ax + dir * (len + 12 * S), ty = ay - up;
+    g.save(); g.beginPath(); const wv = 900 * S * ss(s4); if (dir > 0) g.rect(tx - 4 * S, ty - 80 * S, wv, 220 * S); else g.rect(tx + 4 * S - wv, ty - 80 * S, wv, 220 * S); g.clip();
+    const al = dir > 0 ? 'left' : 'right', ns = (o.ns || 44) * S, uf = `500 ${Math.round(ns * .5)}px ${FONT}`;
+    haloText(g, o.title || '', tx, ty - 10 * S, { font: `600 ${(o.ts || 25) * S}px ${FONT}`, track: 3.5 * S, align: al, hw: 7 * S });
+    let uw = 0; if (o.unit) { g.font = uf; g.letterSpacing = (2 * S) + 'px'; uw = g.measureText(o.unit).width + 10 * S; g.letterSpacing = '0px'; }
     let nw = 0; if (o.num) { g.font = `400 ${ns}px ${FONT}`; nw = g.measureText(o.num).width; }
-    if (o.num) haloText(g, o.num, dir > 0 ? tx : tx - uw, ty + ns + 2, { font: `400 ${ns}px ${FONT}`, align: al, track: .5 });
-    if (o.unit) haloText(g, o.unit, dir > 0 ? tx + nw + 10 : tx, ty + ns + 2, { font: uf, align: al, track: 2 });
+    if (o.num) haloText(g, o.num, dir > 0 ? tx : tx - uw, ty + ns + 2 * S, { font: `400 ${ns}px ${FONT}`, align: al, track: .5 * S, hw: 7 * S });
+    if (o.unit) haloText(g, o.unit, dir > 0 ? tx + nw + 10 * S : tx, ty + ns + 2 * S, { font: uf, align: al, track: 2 * S, hw: 7 * S });
     g.restore();
-    if (o.icons) o.icons(g, tx, ty + (o.num ? ns + 18 : 12), dir);
+    if (o.icons) o.icons(g, tx, ty + (o.num ? ns + 18 * S : 12 * S), dir);
   }
   g.restore();
 }
 // circular detail inset (frame within the frame), leader from anchor. drawIn(g, cx, cy, r) draws inside the clipped disc
+// cx/cy/r 是**设计帧**像素（屏幕空间家具）→ 走设计帧→当前帧的等比装入（与相机里的世界对齐）；线宽/半径 ×S。
 export function inset(iso, ax, ay, cx, cy, r, a, drawIn, o = {}) {
   const g = iso.g; if (a <= 0) return;
+  cx = W / 2 + (cx - NATIVE.W / 2) * S; cy = H / 2 + (cy - NATIVE.H / 2) * S; r *= S;
   const l = eo(seg(a, 0, .35)), c = back(seg(a, .25, .8), 1.4), R = r * c;
   const ang = Math.atan2(cy - ay, cx - ax), ex = cx - Math.cos(ang) * R, ey = cy - Math.sin(ang) * R;
-  g.save(); g.strokeStyle = PAL.ink; g.lineWidth = 2;
+  g.save(); g.strokeStyle = PAL.ink; g.lineWidth = 2 * S;
   g.beginPath(); g.moveTo(ax, ay); g.lineTo(lerp(ax, ex, l), lerp(ay, ey, l)); g.stroke();
-  g.beginPath(); g.arc(ax, ay, 6, 0, TAU); g.fillStyle = PAL.paper; g.fill(); g.stroke(); g.beginPath(); g.arc(ax, ay, 2.6, 0, TAU); g.fillStyle = PAL.ink; g.fill();
+  g.beginPath(); g.arc(ax, ay, 6 * S, 0, TAU); g.fillStyle = PAL.paper; g.fill(); g.stroke(); g.beginPath(); g.arc(ax, ay, 2.6 * S, 0, TAU); g.fillStyle = PAL.ink; g.fill();
   if (R > 1) {
-    g.beginPath(); g.arc(cx + 6, cy + 9, R, 0, TAU); g.fillStyle = 'rgba(46,37,34,.14)'; g.fill();
+    g.beginPath(); g.arc(cx + 6 * S, cy + 9 * S, R, 0, TAU); g.fillStyle = 'rgba(46,37,34,.14)'; g.fill();
     g.save(); g.beginPath(); g.arc(cx, cy, R, 0, TAU); g.clip(); g.fillStyle = o.bg || PAL.paper; g.fillRect(cx - R, cy - R, 2 * R, 2 * R); drawIn(g, cx, cy, R, c); g.restore();
-    g.beginPath(); g.arc(cx, cy, R, 0, TAU); g.lineWidth = 3; g.stroke();
-    g.beginPath(); g.arc(cx, cy, R + 7, 0, TAU); g.lineWidth = 1; g.setLineDash([3, 5]); g.stroke(); g.setLineDash([]);
+    g.beginPath(); g.arc(cx, cy, R, 0, TAU); g.lineWidth = 3 * S; g.stroke();
+    g.beginPath(); g.arc(cx, cy, R + 7 * S, 0, TAU); g.lineWidth = 1 * S; g.setLineDash([3 * S, 5 * S]); g.stroke(); g.setLineDash([]);
   }
   g.restore();
 }
 // tracking ring ("you are here"): dashed ring that slowly turns + optional tag
+// r 由调用方按当前帧给出；线宽/标签字号/引出线偏移是设计像素 → ×S。
 export function ring(g, x, y, r, a = 1, t = 0, tag = null, o = {}) {
-  if (a <= 0) return; g.save(); g.globalAlpha = a; g.strokeStyle = o.color || PAL.ink; g.lineWidth = o.lw || 2.5; g.setLineDash([r * .35, r * .22]); g.lineDashOffset = -t * r * .6;
+  if (a <= 0) return; g.save(); g.globalAlpha = a; g.strokeStyle = o.color || PAL.ink; g.lineWidth = (o.lw || 2.5) * S; g.setLineDash([r * .35, r * .22]); g.lineDashOffset = -t * r * .6;
   g.beginPath(); g.arc(x, y, r * eo(seg(a, 0, 1)), 0, TAU); g.stroke(); g.setLineDash([]);
-  if (tag) { const ang = o.ang ?? -.8, px = x + Math.cos(ang) * r, py = y + Math.sin(ang) * r, qx = px + 26, qy = py - 26; g.beginPath(); g.moveTo(px, py); g.lineTo(qx, qy); g.lineTo(qx + 18, qy); g.stroke(); haloText(g, tag, qx + 24, qy + 9, { font: `600 ${o.ts || 26}px ${FONT}`, track: 2 }); }
+  if (tag) { const ang = o.ang ?? -.8, px = x + Math.cos(ang) * r, py = y + Math.sin(ang) * r, qx = px + 26 * S, qy = py - 26 * S; g.beginPath(); g.moveTo(px, py); g.lineTo(qx, qy); g.lineTo(qx + 18 * S, qy); g.stroke(); haloText(g, tag, qx + 24 * S, qy + 9 * S, { font: `600 ${(o.ts || 26) * S}px ${FONT}`, track: 2 * S, hw: 7 * S }); }
   g.restore();
 }
 // cut line: dashed ink line with a small scissor-tick at the head, drawn to fraction a
 export function cutLine(g, pts, a, o = {}) {
   if (a <= 0) return; let L = 0; const d = []; for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); d.push(l); L += l; }
-  let rem = L * clamp(a); g.save(); g.strokeStyle = o.color || PAL.ink; g.lineWidth = o.lw || 2.5; g.setLineDash(o.dash || [10, 7]); g.beginPath(); g.moveTo(pts[0][0], pts[0][1]); let hx = pts[0][0], hy = pts[0][1];
+  let rem = L * clamp(a); g.save(); g.strokeStyle = o.color || PAL.ink; g.lineWidth = (o.lw || 2.5) * S; g.setLineDash(o.dash || [10 * S, 7 * S]); g.beginPath(); g.moveTo(pts[0][0], pts[0][1]); let hx = pts[0][0], hy = pts[0][1];
   for (let i = 1; i < pts.length && rem > 0; i++) { const f = Math.min(1, rem / d[i - 1]); hx = lerp(pts[i - 1][0], pts[i][0], f); hy = lerp(pts[i - 1][1], pts[i][1], f); g.lineTo(hx, hy); rem -= d[i - 1]; }
-  g.stroke(); g.setLineDash([]); if (a < 1) { g.beginPath(); g.arc(hx, hy, 5, 0, TAU); g.fillStyle = o.color || PAL.ink; g.fill(); } g.restore();
+  g.stroke(); g.setLineDash([]); if (a < 1) { g.beginPath(); g.arc(hx, hy, 5 * S, 0, TAU); g.fillStyle = o.color || PAL.ink; g.fill(); } g.restore();
 }
 // section hatch fill for cut faces (cream + 45° ink hatching), pts in screen space
 export function hatch(g, pts, o = {}) {
   g.save(); g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath(); g.fillStyle = o.fill || PAL.paper; g.fill(); g.clip();
-  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys), sp = o.sp || 7;
-  g.strokeStyle = o.color || 'rgba(46,37,34,.55)'; g.lineWidth = o.lw || 1.2; g.beginPath();
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys), sp = (o.sp || 7) * S;
+  g.strokeStyle = o.color || 'rgba(46,37,34,.55)'; g.lineWidth = (o.lw || 1.2) * S; g.beginPath();
   for (let s = x0 - (y1 - y0); s < x1; s += sp) { g.moveTo(s, y1); g.lineTo(s + (y1 - y0), y0); } g.stroke(); g.restore();
-  g.save(); g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath(); g.strokeStyle = PAL.ink; g.lineWidth = o.edge || 1.5; g.stroke(); g.restore();
+  g.save(); g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath(); g.strokeStyle = PAL.ink; g.lineWidth = (o.edge || 1.5) * S; g.stroke(); g.restore();
 }
 
 // ---------- Isotype icons (screen space, size s px, drawn in the same 3-tone language) ----------
@@ -338,6 +357,7 @@ export const ICON = {
 };
 // grid of n icons, lit count m (fractional ok): cols, gap in px
 export function iconGrid(g, x, y, n, m, cols, gap, draw, dir = 1) {
+  gap *= S;   // 图标网格只在 pin 的屏幕空间回调里用（坐标为当前帧）→ 尺寸按紧轴缩放
   for (let i = 0; i < n; i++) { const c = i % cols, r = (i / cols) | 0, px = x + dir * (c * gap + gap / 2) - (dir < 0 ? 0 : 0), py = y + r * gap + gap / 2; const on = i < m, pop = on ? back(clamp(m - i), 2.4) : 1; g.save(); g.translate(px, py); g.scale(pop, pop); draw(g, 0, 0, gap * .86, on ? 1 : 0, i); g.restore(); }
 }
 

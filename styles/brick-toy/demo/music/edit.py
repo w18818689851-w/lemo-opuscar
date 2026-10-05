@@ -2,7 +2,7 @@
 # A 段：Monkeys Spinning Monkeys，第一拍对齐第一块砖（4.0s），倒塌瞬间硬切
 # 重建：同曲安静段回来（-9dB），下拍对齐"找到锥头"
 # 升空：Heroic Age 53.61s 的爆发点对齐点火，60.53→79.02 跳 10 小节（相似度 .95），最后重音落在片尾卡
-import numpy as np, soundfile as sf, librosa, warnings, json; warnings.filterwarnings('ignore')
+import numpy as np, soundfile as sf, librosa, warnings, json, os; warnings.filterwarnings('ignore'); os.chdir(os.path.dirname(os.path.abspath(__file__)))
 SR, DUR = 48000, 54.0
 out = np.zeros((int(SR * DUR), 2))
 def load(f):

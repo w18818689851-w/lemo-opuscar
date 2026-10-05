@@ -150,12 +150,12 @@ export class FilmPost {
 
 // dust specks, hairs and the odd blotch, drawn over the processed frame (2D). Deterministic per frame.
 export function damage(g, x, y, w, h, frame, strength = .6, o = {}) {
-  const r = FilmPost.rnd, k = strength;
+  const r = FilmPost.rnd, k = strength, s = o.s ?? 1;    // s：损坏颗粒/发丝的尺寸随当前帧的紧轴缩放（16:9 时 1）
   g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
   const nDust = Math.floor((2 + r(frame * 1.3) * 7) * k * (o.dust ?? 1));
   for (let i = 0; i < nDust; i++) {
     const a = r(frame * 7.1 + i * 3.3), b = r(frame * 3.7 + i * 5.9), c = r(frame * 1.9 + i * 8.1);
-    const px = x + a * w, py = y + b * h, rad = .8 + c * c * 3.2;
+    const px = x + a * w, py = y + b * h, rad = (.8 + c * c * 3.2) * s;
     const white = r(frame + i * 11.7) < .35;
     g.fillStyle = white ? `rgba(240,232,215,${.55 + c * .4})` : `rgba(12,10,8,${.6 + c * .35})`;
     g.beginPath();
@@ -166,15 +166,15 @@ export function damage(g, x, y, w, h, frame, strength = .6, o = {}) {
   // a hair caught in the gate: stays for ~10 frames, wiggles
   const hairLife = Math.floor(frame / 11);
   if (r(hairLife * 5.3) < .22 * k * (o.hair ?? 1)) {
-    const hx = x + r(hairLife * 2.1) * w, hy = y + r(hairLife * 4.7) * h, len = 40 + r(hairLife) * 90;
-    g.strokeStyle = 'rgba(10,8,6,.75)'; g.lineWidth = 1.2; g.beginPath();
-    for (let j = 0; j <= 20; j++) { const u = j / 20, px = hx + Math.sin(u * 5 + hairLife) * 14 * u + u * len * .6, py = hy + u * len + Math.sin(u * 9 + frame * .3) * 3; j ? g.lineTo(px, py) : g.moveTo(px, py); }
+    const hx = x + r(hairLife * 2.1) * w, hy = y + r(hairLife * 4.7) * h, len = (40 + r(hairLife) * 90) * s;
+    g.strokeStyle = 'rgba(10,8,6,.75)'; g.lineWidth = 1.2 * s; g.beginPath();
+    for (let j = 0; j <= 20; j++) { const u = j / 20, px = hx + Math.sin(u * 5 + hairLife) * 14 * s * u + u * len * .6, py = hy + u * len + Math.sin(u * 9 + frame * .3) * 3 * s; j ? g.lineTo(px, py) : g.moveTo(px, py); }
     g.stroke();
   }
   // rare big blotch (cue-mark-like) for a single frame
   if (r(frame * 2.9) < .012 * k * (o.blotch ?? 1)) {
     const bx = x + (.2 + r(frame) * .6) * w, by = y + (.15 + r(frame * 3) * .3) * h;
-    g.fillStyle = 'rgba(245,238,222,.5)'; g.beginPath(); g.arc(bx, by, 10 + r(frame * 5) * 18, 0, 7); g.fill();
+    g.fillStyle = 'rgba(245,238,222,.5)'; g.beginPath(); g.arc(bx, by, (10 + r(frame * 5) * 18) * s, 0, 7); g.fill();
   }
   g.restore();
 }

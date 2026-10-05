@@ -1,6 +1,7 @@
 // The Bell Founder · paper transitions: a sheet with weight that curls off a surface (page curl on a cylinder)
 import { clamp } from '/core/lib.js';
-const W = 1920, H = 1080, PI = Math.PI;
+import { W, H } from './stage.js';       // 当前帧尺寸（stage.setFrame() 定的活绑定；1920×1080 时即设计帧）
+const PI = Math.PI;
 
 // Draw a sheet lying on the frame whose free (right) edge has been peeled back to the fold line xf, rolling
 // over a cylinder of radius r and lying flipped (underside up) to the left of the fold.

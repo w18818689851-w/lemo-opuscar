@@ -6,15 +6,15 @@ const FS = `#version 300 es
 precision highp float;
 in vec2 uv; out vec4 o;
 uniform sampler2D ink, fx, ov;
-uniform vec2 res, sheet;
+uniform vec2 res, sheet, design;
 uniform vec4 cam;        // cx, cy, zoom, rot
-uniform float wetBlur, seed, desk, sheetA, fade;
+uniform float wetBlur, seed, desk, sheetA, fade, fitS;   // fitS = 0 ⇒ 恒等（16:9 原式）；>0 ⇒ 设计帧等比装入的紧轴缩放
 uniform vec4 roll;       // 纸卷甩开：x = 已铺开的纸面 x（>= sheet.x 表示全铺开），y = 卷筒半径
 float h21(vec2 p){ vec3 q = fract(vec3(p.xyx)*.1031 + seed*.0173); q += dot(q, q.yzx+33.33); return fract((q.x+q.y)*q.z); }
 float vn(vec2 p){ vec2 i = floor(p), f = fract(p); vec2 u = f*f*(3.-2.*f);
   return mix(mix(h21(i),h21(i+vec2(1,0)),u.x), mix(h21(i+vec2(0,1)),h21(i+vec2(1,1)),u.x), u.y); }
 float fbm(vec2 p){ float s = 0., a = .5; for(int i=0;i<5;i++){ s += a*vn(p); p = p*2.03 + 17.1; a *= .5; } return s; }
-vec2 toSheet(vec2 s){ vec2 d = (s - res*.5)/cam.z; float c = cos(-cam.w), si = sin(-cam.w); return vec2(c*d.x - si*d.y, si*d.x + c*d.y) + cam.xy; }
+vec2 toSheet(vec2 s, float z){ vec2 d = (s - res*.5)/z; float c = cos(-cam.w), si = sin(-cam.w); return vec2(c*d.x - si*d.y, si*d.x + c*d.y) + cam.xy; }
 vec3 paper(vec2 p){
   // 普鲁士蓝：低频褪色 + 涂布刷痕（横向拉长）
   float n1 = fbm(p/760.), n2 = fbm(vec2(p.x/1500., p.y/70.) + 3.), n3 = fbm(p/190. + 9.);
@@ -46,11 +46,20 @@ vec3 paper(vec2 p){
 }
 void main(){
   vec2 s = vec2(uv.x, 1.-uv.y)*res;
-  vec2 p = toSheet(s);
-  vec2 tuv = vec2(uv.x, uv.y);
+  // 设计帧(1920×1080) → 当前帧「等比装入」：uvT = 该像素在设计帧里的 uv，inD = 是否落在设计帧内。
+  // 相机同步：纸面用 cam.z×fitS 取样 ⇒ 绘图（ink/fx/ov 里是设计帧画面）落在设计帧区域内，纸面在其四周继续延伸。
+  // fitS = 0 时走原式（uvT = uv、inD = 1、z = cam.z），1920×1080 逐字节不变（分支躲开浮点重排）。
+  vec2 uvT = uv; float inD = 1.; float z = cam.z;
+  if (fitS > .0) {
+    uvT = vec2(.5 + (s.x - res.x*.5)/(fitS*design.x), .5 - (s.y - res.y*.5)/(fitS*design.y));
+    inD = step(0., uvT.x)*step(uvT.x, 1.)*step(0., uvT.y)*step(uvT.y, 1.);
+    z = cam.z*fitS;
+  }
+  vec2 p = toSheet(s, z);
+  vec2 tuv = uvT;
   vec4 F = texture(fx, tuv);
   vec4 Fb = textureLod(fx, tuv, 3.);
-  float wet = clamp(max(F.g, Fb.g*.9), 0., 1.);
+  float wet = clamp(max(F.g, Fb.g*.9), 0., 1.)*inD;
   float inside = step(0., p.x)*step(p.x, sheet.x)*step(0., p.y)*step(p.y, sheet.y);
   // 纸卷甩开：roll.x 以右还没铺开
   float unrolled = step(p.x, roll.x);
@@ -77,15 +86,15 @@ void main(){
     float w = clamp(wet*wetBlur, 0., 1.);
     float sharp = mix(L0, mix(L1, L2, .5), w*.85);
     float grainK = .80 + .20*smoothstep(.2, .8, vn(p*.9 + 3.));
-    float L = clamp(sharp*grainK + L1*.18 + L2*.10 + w*L3*.35, 0., 1.);
+    float L = clamp(sharp*grainK + L1*.18 + L2*.10 + w*L3*.35, 0., 1.)*inD;
     vec3 lineC = vec3(.905,.940,.975);
     pc = mix(pc, lineC, L*mix(.96, .72, w));
     col = pc;
   }
   // 投影（手、云）：纸面变暗
-  col *= 1. - .62*clamp(Fb.r*.5 + F.r*.5, 0., 1.);
+  col *= 1. - .62*clamp(Fb.r*.5 + F.r*.5, 0., 1.)*inD;
   // 红色印章：橡皮章的颗粒与漏墨
-  float st = F.b;
+  float st = F.b*inD;
   if (st > .001) {
     float holes = smoothstep(.12, .45, vn(p*.45 + 11.)*.6 + fbm(p/6.)*.6);
     vec3 red = vec3(.76,.22,.17);
@@ -105,13 +114,13 @@ void main(){
   // 暗角
   vec2 q = uv - .5; col *= 1. - .22*dot(q, q)*2.2;
   col = mix(deskC*.0, col, sheetA);
-  vec4 O = texture(ov, tuv);
+  vec4 O = texture(ov, tuv); O *= inD;
   col = col*(1.-O.a) + O.rgb;
   col *= 1. - fade;
   o = vec4(col, 1.);
 }`;
 
-export function makePaper(canvas, W, H) {
+export function makePaper(canvas, DW, DH) {
   const gl = canvas.getContext('webgl2', { preserveDrawingBuffer: true, antialias: false });
   const sh = (t, s) => { const x = gl.createShader(t); gl.shaderSource(x, s); gl.compileShader(x); if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(x)); return x; };
   const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(pr);
@@ -128,11 +137,16 @@ export function makePaper(canvas, W, H) {
   gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
   return (inkC, fxC, ovC, o) => {
+    // 输出尺寸 = 画布尺寸 = 视口（DW/DH 是设计帧 = ink/fx/ov 的尺寸，固定 1920×1080）。
+    // 设计帧 → 当前帧「等比装入」：紧轴缩放 fitS；1920×1080 时 fitS = 0 ⇒ 着色器走原式、逐字节不变。
+    const W = canvas.width, H = canvas.height;
     gl.viewport(0, 0, W, H);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tInk); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, inkC); gl.generateMipmap(gl.TEXTURE_2D);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, tFx); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, fxC); gl.generateMipmap(gl.TEXTURE_2D);
     gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, tOv); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ovC); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false); gl.generateMipmap(gl.TEXTURE_2D);
     gl.uniform2f(U('res'), W, H); gl.uniform2f(U('sheet'), o.sheet[0], o.sheet[1]);
+    gl.uniform2f(U('design'), DW, DH);
+    gl.uniform1f(U('fitS'), (W === DW && H === DH) ? 0 : Math.min(W / DW, H / DH));
     gl.uniform4f(U('cam'), o.cam.x, o.cam.y, o.cam.z, o.cam.r || 0);
     gl.uniform1f(U('wetBlur'), o.wetBlur ?? 1); gl.uniform1f(U('seed'), o.seed ?? 0);
     gl.uniform1f(U('desk'), o.desk ?? 1); gl.uniform1f(U('fade'), o.fade ?? 0); gl.uniform1f(U('sheetA'), o.sheetA ?? 1);

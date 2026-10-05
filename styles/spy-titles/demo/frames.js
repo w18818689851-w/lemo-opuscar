@@ -1,27 +1,28 @@
 // 场景（片中复用）+ 关卡 1 风格帧
-import { g, C, S, W, H, clear, piece, rough, roughC, rectP, circP, ellP, label } from './paper.js';
+import { g, C, ST, S, FX, FY, NATIVE, W, H, dXf, clear, piece, rough, roughC, rectP, circP, ellP, label } from './paper.js';
 import { layout, drawLine } from './glyph.js';
 import { agentSide, courierSide, key, runPose, walkPose, coRunPose, AGENT_POSE, COURIER_POSE } from './chars.js';
 import { drawTitle, titleBox, CUT_ANG } from './title.js';
 import { hash } from '/core/lib.js';
 
 // ── 旁白字幕：纸白窄纸条 + 红钥匙孔图标（片头字幕的一部分） ──
+// 字幕是「帧」空间的家什（贴视口下沿），所以位置按 FX/FY、尺寸/字号按 S 重排。
 export function subStrip(text, opt = {}) {
   g.save(); g.setTransform(1, 0, 0, 1, 0, 0);
-  g.font = '600 44px LSpartan'; g.letterSpacing = '0.5px';
+  g.font = `600 ${44 * S}px LSpartan`; g.letterSpacing = (0.5 * S) + 'px';
   const tw = g.measureText(text).width;
-  const x = 96 + (opt.dx || 0), y = 958, h = 70, w = tw + 118;
+  const x = 96 * FX + (opt.dx || 0) * S, y = 958 * FY, h = 70 * S, w = tw + 118 * S;
   const dark = opt.dark;
   g.translate(x, y); g.rotate(-1 * Math.PI / 180);
-  const strip = rough([[0, -h / 2], [w, -h / 2 + 2], [w - 16, h / 2], [-10, h / 2 - 1]], 777 + text.length, 1.1, 10);
+  const strip = rough([[0, -h / 2], [w, -h / 2 + 2 * S], [w - 16 * S, h / 2], [-10 * S, h / 2 - 1 * S]], 777 + text.length, 1.1 * S, 10 * S);
   piece(strip, dark ? C.ink : C.paper, { gap: 0, shA: .35 });
   // 钥匙孔图标
-  g.save(); g.translate(40, -12); g.scale(.28, .28);
+  g.save(); g.translate(40 * S, -12 * S); g.scale(.28 * S, .28 * S);
   piece([[0, -31], ...circP(0, 0, 31, 24).slice(0), [0, 0]].slice(1), C.red, { gap: 0, shadow: false });
   piece([[-12.5, 20], [12.5, 20], [23, 118], [-23, 118]], C.red, { gap: 0, shadow: false });
   g.restore();
   g.fillStyle = dark ? C.paper : C.ink; g.textBaseline = 'middle';
-  g.fillText(text, 78, 3);
+  g.fillText(text, 78 * S, 3 * S);
   g.restore();
 }
 
@@ -41,14 +42,14 @@ export function airport(o) {
     g.restore();
   }
   // 地面：墨黑地带 + 跑道长破折号
-  piece(roughC('airFloor', () => rectP(-20, AIR.floor, W + 40, H - AIR.floor + 20), 610, 1.4, 14), C.ink, { gap: 0, shadow: false });
+  piece(roughC('airFloor', () => rectP(-20, AIR.floor, NATIVE.W + 40, NATIVE.H - AIR.floor + 20), 610, 1.4, 14), C.ink, { gap: 0, shadow: false });
   for (let i = -2; i < 14; i++) {
     const x = ((i * 260 - cam * 1.25) % (260 * 14) + 260 * 14) % (260 * 14) - 300;
     piece(roughC('dash' + (i & 3), () => [[0, 0], [150, -2], [152, 14], [2, 16]], 620 + (i & 3), 1, 10).map(([a, b]) => [a + x, b + 980]), C.paper, { gap: 0, shadow: false });
   }
   // 悬挂的翻牌指示牌：THE AGENT
   const sx = 1500 - cam * .9;
-  if (sx > -700 && sx < W + 100) {
+  if (sx > -700 && sx < NATIVE.W + 100) {
     piece([[sx + 60, -10], [sx + 66, -10], [sx + 66, 60], [sx + 60, 60]], C.ink, { gap: 0 });
     piece([[sx + 454, -10], [sx + 460, -10], [sx + 460, 60], [sx + 454, 60]], C.ink, { gap: 0 });
     piece(roughC('board', () => rectP(0, 0, 520, 150), 630, 1.2, 12).map(([a, b]) => [a + sx, b + 52]), C.ink);
@@ -101,8 +102,8 @@ export function train(o) {
   }
   // 电线（纸白细线 → 网格母题）
   // 地面 + 铁轨
-  piece(roughC('trGround', () => rectP(-20, TR.rail + 6, W + 40, 300), 720, 1.4, 14), C.ink, { gap: 0, shadow: false });
-  piece(roughC('rail', () => rectP(-20, TR.rail - 2, W + 40, 9), 721, .8, 14), C.paper, { gap: 0, shadow: false });
+  piece(roughC('trGround', () => rectP(-20, TR.rail + 6, NATIVE.W + 40, 300), 720, 1.4, 14), C.ink, { gap: 0, shadow: false });
+  piece(roughC('rail', () => rectP(-20, TR.rail - 2, NATIVE.W + 40, 9), 721, .8, 14), C.paper, { gap: 0, shadow: false });
   for (let i = -1; i < 22; i++) { const x = ((i * 96 - (cam + t * 900) * 1.0) % 2112 + 2112) % 2112 - 100; piece([[x, TR.rail + 16], [x + 44, TR.rail + 16], [x + 42, TR.rail + 24], [x + 2, TR.rail + 24]], C.redD, { gap: 0, shadow: false }); }
   // 车厢 = 单词
   const { cars, len } = trainLayout();
@@ -110,7 +111,7 @@ export function train(o) {
   const bob = (i) => (Math.floor(t * 12) % 2) * (i % 2 ? 1 : -1) * 1.5;
   cars.forEach((c, i) => {
     const cx = x0 + c.x, w = c.L.width, by = TR.base + bob(i);
-    if (cx > W + 50 || cx + w < -50) return;
+    if (cx > NATIVE.W + 50 || cx + w < -50) return;
     // 底盘 + 车钩
     piece(roughC('chassis' + i, () => rectP(-18, 0, w + 36, 26), 730 + i, 1.1, 10).map(([a, b]) => [a + cx, b + by]), C.ink);
     if (i < cars.length - 1) piece([[cx + w + 18, by + 8], [cx + w + 112, by + 8], [cx + w + 112, by + 16], [cx + w + 18, by + 16]], C.ink, { gap: 0 });
@@ -127,7 +128,7 @@ export function train(o) {
   });
   // 火车头（SAMPLER 前面）
   const last = cars[cars.length - 1], lx = x0 + last.x + last.L.width + 60;
-  if (lx < W + 400) {
+  if (lx < NATIVE.W + 400) {
     const by = TR.base + bob(9);
     piece(roughC('loco', () => [[0, -250], [120, -250], [240, -40], [260, 30], [0, 30]], 740, 1.4, 10).map(([a, b]) => [a + lx, b + by]), C.ink);
     // 车灯 + 光束
@@ -144,7 +145,7 @@ export function train(o) {
 export function titleScene(o) {
   clear(C.paper);
   const Ht = o.H || 250, { w, h } = titleBox(Ht);
-  const x = (W - w) / 2 + (o.dx || 0), y = (H - h) / 2 - 20 + (o.dy || 0);
+  const x = (NATIVE.W - w) / 2 + (o.dx || 0), y = (NATIVE.H - h) / 2 - 20 + (o.dy || 0);
   // 背景：淡红细斜线网格（开场网格的回响）
   g.save(); g.globalAlpha = o.gridA ?? .9;
   for (let i = -8; i < 20; i++) {
@@ -160,6 +161,7 @@ export function titleScene(o) {
 
 // ═══════════ 关卡 1 风格帧 ═══════════
 export function frame(name, t, Q) {
+  dXf();   // 风格帧也走「设计帧 → 当前帧」的等比装入（16:9 时恒等）
   if (name === 'airport') {
     airport({
       cam: 1450, plane: [900, 120, -.2],

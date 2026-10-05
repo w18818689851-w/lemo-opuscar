@@ -2,6 +2,7 @@
 import { PAL, canvas, piece, fill, trace, finishPaper, Pl, rnd } from './paper.js';
 import { rosette } from './motifs.js';
 import { put } from './rig.js';
+import { W, H, S as FS } from './film.js';
 
 // 文字剪纸片：把文字填成红纸（阳刻），加纹理刀口
 const TXT = {};
@@ -34,14 +35,15 @@ function subStrip(text) {
   g.fillText(text, 80, h / 2 + 2);
   return SUBS[text] = { c, w, h };
 }
-// 字幕：cues = [{t0,t1,text}]；贴春联一样从上方落下（12 fps 两步）
+// 字幕：cues = [{t0,t1,text}]；贴春联一样从上方落下（12 fps 两步）。
+// 字幕是**当前帧**的家什（全屏叠加）：居中于帧中心 W/2、贴底于帧底 H，尺寸 ×S ⇒ 竖屏下仍居中贴底、不溢出画宽。
 export function drawSubs(g, t, cues) {
   for (const q of cues) {
     if (t < q.t0 || t > q.t1) continue;
     const s = subStrip(q.text), u = Math.floor((t - q.t0) * 12) / 12, drop = u < .08 ? -14 : u < .16 ? -5 : 0, a = Math.min(1, (q.t1 - t) / .2);
-    const x = 960 - s.w / 2, y = 1080 - 70 - s.h + drop;
+    const x = W / 2 - s.w * FS / 2, y = H - (70 + s.h) * FS + drop * FS;
     g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = Math.max(0, a);
-    g.shadowColor = 'rgba(30,4,8,.45)'; g.shadowBlur = 8; g.shadowOffsetX = 3; g.shadowOffsetY = 5;
-    g.drawImage(s.c, x, y, s.w, s.h); g.restore();
+    g.shadowColor = 'rgba(30,4,8,.45)'; g.shadowBlur = 8 * FS; g.shadowOffsetX = 3 * FS; g.shadowOffsetY = 5 * FS;
+    g.drawImage(s.c, x, y, s.w * FS, s.h * FS); g.restore();
   }
 }

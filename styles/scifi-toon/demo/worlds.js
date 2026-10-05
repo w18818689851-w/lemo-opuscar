@@ -1,7 +1,7 @@
 // worlds.js — 每个平行宇宙一套配色的背景、客串外星人、传送门
 // 舞台坐标：1920×1080，地平线/地面约 y=900；背景画得比舞台宽，给推拉摇留余量
 import { clamp, lerp, hash, vnoise, TAU, ss } from '/core/lib.js';
-import { INK, g, push, pop, translate, rotate, scale, shape, fillOnly, stroke, ell, arc, spline, rr, rect, noodle, quad, dot, text, bands, S } from './toon.js';
+import { INK, g, push, pop, translate, rotate, scale, shape, fillOnly, stroke, ell, arc, spline, rr, rect, noodle, quad, dot, text, bands } from './toon.js';
 import { eye, mouth, hand, vask, PAL } from './chars.js';
 
 const X0 = -1400, X1 = 3400;

@@ -1,6 +1,7 @@
 // 镜头：构图关键帧（中心/缩放/转动/跟拍权重）与笔尖跟拍混合；跟拍带延迟与预判的平滑，并保证笔尖在画内
 import { clamp, lerp } from '/core/lib.js';
 import { headAt, posAt } from './geom.js';
+import { S } from './frame.js';
 
 export const BASE = 0.85;   // z=1 时每单位像素（整张脸入画）
 
@@ -27,7 +28,9 @@ export function camAt(P, keys, t, W = 1920, H = 1080) {
   }
   fx /= ws; fy /= ws;
   let cx = lerp(K.x, fx, K.f), cy = lerp(K.y, fy, K.f);
-  const k = BASE * K.z, r = K.r * Math.PI / 180;
+  // 相机把紧轴缩放 S 折进 zoom：竖屏时世界整体按 S 缩小，主体落在镜头放它的地方（不再重复乘 FX/FY）。
+  // 1920×1080 时 S = 1，k 逐字节等于旧值。
+  const k = BASE * K.z * S, r = K.r * Math.PI / 180;
   // 笔尖保持在画面内（软约束）
   const pen = posAt(P, headAt(P, t));
   const c = Math.cos(-r), s = Math.sin(-r);
