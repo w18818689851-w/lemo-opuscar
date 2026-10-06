@@ -26,8 +26,18 @@ styles/*/demo/tts/*.onnx
 styles/*/demo/tts/*.bin
 styles/*/demo/music.wav
 *.log
-# 喊词是输入素材（只能在 macOS 上近似重建），要提交
-!styles/game-show/demo/voices/*.wav
+# 2026-10-06: 这里原有 `!styles/game-show/demo/voices/*.wav`（想放开 game-show 的 40 条喊词 wav），
+# 但它被下面 `styles/*/demo/**/*.wav` 那行**覆盖**（gitignore 是「最后一条匹配者胜」）
+# ⇒ 该例外**从未生效**，那批 wav 也**从未入库**。核过「它想放开的东西该不该入库」后**删掉这条例外**
+# （不是把它挪到末尾），判据如下 —— 那批 wav 是**生成物**，不是输入素材：
+#   · demo/make_voices_kokoro.py（已跟踪）用 core/tts/tts.py（Kokoro，离线）从 voices/lines*.txt
+#     （已跟踪）直出 voices/*.wav；demo/mix.py 自述现存这 40 条就是它的产物；
+#     DEMO.md 第 109 行也写 `make_voices.sh regenerate them`。
+#   · 全仓 `git ls-files '*.wav'` = **0 条** —— 没有任何 wav 是源文件；本仓自己的
+#     scripts/check-dual-copy-sync.mjs 生成物规则第 4 条也把 `voices/` 列为**产物目录**。
+#   · 原注释「只能在 macOS 上近似重建（所以要提交）」的前提是「本机没有 macOS ⇒ 生不出来」，
+#     而 make_voices_kokoro.py 正是为推翻它而加的 ⇒ 该例外已失去依据。
+# 新克隆要跑该 demo 的音频链，先跑：.venv/bin/python demo/make_voices_kokoro.py
 # 赛事官方图，只作参考、不分发（片中标识怎么处理开源前再定）
 styles/pictogram-motion/demo/ref/
 # 2026-10-06: 原来这里有一条 `styles/*/demo/music/src/`，把配乐**源文件**也挡了 ——
