@@ -17,6 +17,24 @@ Work in `styles/<slug>/` (lowercase letters, digits, hyphens; unique). Start fro
 
 Assets are CC0, CC BY or OFL only, each in `demo/CREDITS`. No watermark on any film. Real people, brands and events appear only in an unofficial fan film; its `DEMO.md` says so.
 
+**A fresh clone has no fonts — fetch them before rendering a demo.** `styles/*/demo/fonts/**` is
+gitignored (`.gitignore:63-64`, `:77-78`), so a new clone arrives with **0 of the 954** font files across
+**all 41** demos that ship a `demo/fonts/`. Each `fonts.css` then points at files that are not there — the
+tool prints `optional file missing: <URL>` and carries on, so every face falls back to a system font.
+
+```sh
+bash tools/fetch-fonts.sh                 # all 41 demos
+bash tools/fetch-fonts.sh --only woodcut  # one style (repeatable, space-separated)
+FONT_PY=.venv/bin/python bash tools/fetch-fonts.sh   # if fontTools lives in the library venv
+```
+
+**It needs the network — that is the cost.** Sources come from `google/fonts` through three mirrors in turn
+(jsDelivr → raw.githubusercontent → gitmirror) and are converted locally with `fontTools` + `brotli`, so
+**an offline machine cannot fetch them** and keeps the fallback. *Why they are not committed:* 954 files is
+bulk the repository should not carry, and this script is the judged way to regenerate them — `CREDITS` in
+each `demo/` names every face. *How to judge:* after a fetch, this must print **954**:
+`find styles -path '*demo/fonts*' \( -name '*.ttf' -o -name '*.woff2' \) | wc -l`
+
 **The audio chain a style must expose.** The orchestrator finds and runs a style's audio as three
 separate, filename-matched steps — music, foley, mix — so a style whose mixing lives inside a script the
 search classifies as "music" is not broken, it is *mis-shaped*, and it fails the whole render. That is

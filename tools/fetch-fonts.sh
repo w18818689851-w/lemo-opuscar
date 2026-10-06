@@ -18,6 +18,7 @@
 #   · 阶段6    全仓引用审计（只读）
 #
 # 依赖：fontTools + brotli 的 python 环境（见 $FONT_PY）、curl
+# 网络：★ 必须联网 —— 从 google/fonts 经三镜像（jsDelivr → raw.githubusercontent → gitmirror）轮询下载；离线环境跑不了，各风格只剩 404 回退字体。
 # 用法：bash tools/fetch-fonts.sh                 # 全量
 #       bash tools/fetch-fonts.sh --only woodcut  # 只补指定风格（可重复，空格分隔）
 #       FONT_PY=.venv/bin/python bash tools/fetch-fonts.sh
