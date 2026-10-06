@@ -336,6 +336,15 @@ by, and the films `styleboard/build.py:31-49` re-reads each `style.json`'s `dur`
   judge:* read the `输出` line the run prints (`:1370`) before it renders. The console now writes
   `D:/lemo-films/_jobs/<task id>/` and cannot touch a sample film — but a hand-run `lemo-make.mjs` still
   defaults to `D:/lemo-films/<slug>/`, so "the console is safe" is not "my shell is".
+- **A local sample copy can be re-rendered to the wrong length — `dur` follows the *published* film, not the copy.**
+  `D:/lemo-films/pictogram-motion/pictogram-motion.mp4` is a **local re-render** — **161.6 s / 24 fps / 3878 frames**
+  — not the published sample; the published film (the `films` release asset) is **163.6 s / 60 fps / 9816 frames**,
+  which is what `demo/mux.sh` (its `tpad=stop_duration=2` tail), `DEMO.md` ("163.6 s, 9816 frames") and `style.json`'s
+  `"dur": 163.6` all say. *Why:* `style.json.dur` is the runtime the gallery shows, and `styleboard/catalog.json`
+  is built from it — reading it off a hand-overwritten local copy puts a wrong runtime on the card. *How to judge:*
+  `ffprobe` the local file and compare **both** duration and frame rate against the line `DEMO.md` records; the
+  other 42 styles match their published film exactly (spot-checked watercolor 113.6, art-deco 58.4, hd-2d 76.5,
+  brick-toy 54.0), so a single mismatch means the local copy was overwritten — do not "fix" `style.json` to match it.
 - **What the gates catch.** `check-film-aspect.mjs`'s **C class** (`:214-244`) ffprobes every sample film and
   FAILs unless it is **exactly 1920×1080**, naming the slug and file (`C 样板片画幅被改`, `:241`);
   `check-film-delivery.mjs`'s C class compares the declared `generatedVideo.width/height` against the real file
