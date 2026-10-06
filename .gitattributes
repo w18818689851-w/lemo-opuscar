@@ -1,0 +1,48 @@
+# 行尾规则 —— 这个项目对行尾敏感，不要靠 core.autocrlf 自动猜。
+#
+# ★ 为什么加这份文件（2026-10-06 日批 38 个风格废掉 21 个的**根因**，已实证）：
+#   · 本仓此前**没有 .gitattributes**，而这台机器是**系统级 `core.autocrlf=true`**
+#     （工作区平时只靠 `.git/config` 里的**本地** `false` 才勉强保持 LF）。
+#   · ⇒ **新 clone 出来是全仓 CRLF**（实测 1295 个已跟踪文件 `w/crlf`）
+#     ⇒ 两侧 `core/` 字节不一致 ⇒ 编排器**拒绝开工**
+#       （`_distill/logs/silent-film.log:33-46`，`woodcut.log` 同）。
+#   · ⇒ 还会让两个闸门假红（同一根因）：
+#       `check-render-venc`：它解析 `case "${LEMO_VENC:-}" in\n…\nesac` 的正则要**裸 `\n`**，
+#         CRLF 匹配不上 ⇒ 10 个风格被判「找不到块」；
+#       `check-dual-copy-sync`：clone 的 CRLF vs WSL 的 LF ⇒ 实测源文件漂移 1161 处。
+#   · 对照：同机 `D:/lemo-tools` **有** `.gitattributes`，所以它不受影响 ⇒ 本文件照它的写法。
+#
+# ★ 为什么必须 LF（不是洁癖）：
+#   · 渲染读 **WSL 侧**（`lemo-make.mjs` 的 `CFG.wslLib`），源码指纹读 **WIN 侧**
+#     （`scripts/style-scan.mjs`）⇒ 两份副本**必须逐字节一致**（项目纪律「约定三」）。
+#   · `lemo-make.mjs` 里内嵌 shell 模板，会被写到 D:\WSL 再经 wsl.exe 执行，CR 会污染参数。
+#
+# ★ 例外：本仓**没有** `.bat`/`.cmd`（只有 cmd.exe 批处理才必须 CRLF），故不设 CRLF 例外。
+
+# 默认：文本按内容自动判定，入库/检出都归一到 LF
+* text=auto eol=lf
+
+# ── 文本（本仓实际存在的类型，按 `git ls-files` 统计；显式列出便于 review）──────
+*.py     text eol=lf
+*.mjs    text eol=lf
+*.js     text eol=lf
+*.cjs    text eol=lf
+*.sh     text eol=lf
+*.html   text eol=lf
+*.css    text eol=lf
+*.json   text eol=lf
+*.md     text eol=lf
+*.txt    text eol=lf
+*.srt    text eol=lf
+*.csv    text eol=lf
+*.yml    text eol=lf
+*.gltf   text eol=lf
+# 无扩展名的控制文件与许可/致谢（`text=auto` 也覆盖，这里显式钉住）
+.gitignore     text eol=lf
+.gitattributes text eol=lf
+
+# ── 二进制（不要当文本处理；这四个扩展名是本仓实际存在的）─────────────────────
+*.jpg    binary
+*.bin    binary
+*.mp3    binary
+*.woff2  binary
