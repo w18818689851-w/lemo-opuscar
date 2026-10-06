@@ -118,7 +118,18 @@ styles/*/demo/PRODUCTION_LOG*
 #   · voices/words_rel.json ← styles/<slug>/demo/tools/words.py
 #   · voices/lips.json      ← styles/scifi-toon/demo/voice.py（口型表）
 #   · music/score.json      ← styles/<slug>/demo/music/score.py
+#     ★ 只 ignore **music/ 下**那一个（生成物）。`styles/swiss-motion/demo/score.json`（**demo/ 根下**）
+#       不是生成物：它是手写的共享数据（DEMO.md 第 1 步就是 "Write `score.json`"），
+#       `demo/main.js:8` 与 `demo/music/score.py:14` 都**读**它，全仓没有任何脚本写它
+#       ⇒ 它必须留在库里。故**不要**把规则改成 `styles/*/demo/score.json`（那会挡住这份真源码）。
 #   · <slug>.srt            ← core/render/srt.py（各 demo 的 subs.py / tools/srt.py 调用它）
+#     ★★ 但 `.srt` 是**已发布产物、刻意入库**（提交 19f2e2f「把生成物移出仓库（**保留已发布 .srt**）」）：
+#       仓里已跟踪 **41 个** `<slug>.srt`；MAINTAINING.md:16 把它列为风格目录应有文件；
+#       `tools/release.py:239` 在有音轨却没 `<slug>.srt` 时报**警告**（`--strict` 下升为错误）。
+#       ⇒ 口径统一为「**已发布的 `.srt` 必须有，也保留在库里**」。
+#       下面那条 `styles/*/*.srt` **不是**用来删它们的：`.gitignore` 只对**未跟踪**文件生效，
+#       它只让**新风格**的 srt 不会被 `git add` 顺手带进库（要入库得显式 `git add -f`）。
+#       ★ 本次**没有** `git rm --cached` 任何已跟踪的 `.srt`。
 #   · music/timing_report.txt ← styles/engraving/demo/music/score.py（卡点校验报告）
 # ★ 口径与 scripts/check-dual-copy-sync.mjs 的「生成物」判定**故意一致**（那套闸门也只把这些列 backlog、不判 FAIL）。
 # ★★ 注意：这些文件**绝大多数已经被跟踪**（不是未跟踪）。`.gitignore` 只对**未跟踪**文件生效
