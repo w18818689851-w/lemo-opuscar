@@ -18,5 +18,10 @@ Type
 
 Images
   core/assets/polyhaven/walnut_diff.jpg — "American Walnut Veneer", Poly Haven, CC0 (the table under the block, 7–9 s)
-  assets/bearded_man_cc0.jpg — CC0 photo by ThuyHaBich (Pixabay, via Wikimedia Commons); used only for the filter test
-    test still only (a render output, not in the film) — see DEMO.md
+  assets/bearded_man_cc0.jpg — CC0 photo by ThuyHaBich (Pixabay, via Wikimedia Commons)
+    source page: https://commons.wikimedia.org/wiki/File:Bearded_man_smoking_pipe-3013924.jpg
+    used only for the filter test (`?test=filter`, test.js:39-40) — a render output, not in the film; see DEMO.md
+    ★ NOT SHIPPED IN THIS REPOSITORY: this file is not in git and no in-repo script can fetch it.
+      Without it the filter-test path cannot run as-is — test.js:39 awaits `im.decode()`, which rejects on a 404.
+    ★ The Commons page carries "Restrictions: personality": the pictured person's personality rights are
+      not waived by CC0, so redistributing the photo needs the user's own call. Nothing here is legal advice.

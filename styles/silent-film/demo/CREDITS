@@ -14,7 +14,13 @@ Music samples (CC0 1.0):
   Projector sound: synthesised in code (numpy).
 
 Redraw-mode sample (test still only, not in the film; `?scene=frames.redrawSample` renders it):
-  "DiagonalCrosswalkYongeDundas.webm", Raysonho, CC0, Wikimedia Commons (assets/redraw_src.jpg is one frame of it).
+  "DiagonalCrosswalkYongeDundas.webm", Raysonho, CC0, Wikimedia Commons
+    source page: https://commons.wikimedia.org/wiki/File:DiagonalCrosswalkYongeDundas.webm
+    assets/redraw_src.jpg is one frame cropped out of that video: regenerable from the CC0 source in principle,
+    but the exact crop position was never recorded, so it cannot be reproduced frame-for-frame from this note.
+    ★ NOT SHIPPED IN THIS REPOSITORY: this file is not in git and no in-repo script can fetch it.
+      The two paths that read it (frames.js:119, sheets.js:28) attach only `onload`, never `onerror` —
+      so a 404 hangs them instead of failing, and neither path can run as-is.
 
 References (grammar only, nothing copied): Buster Keaton, The General (1926) and Sherlock Jr. (1924); Harold Lloyd, Safety Last! (1923);
 Georges Méliès (iris transitions); The Artist (2011); 1920s photoplay piano cue sheets.
