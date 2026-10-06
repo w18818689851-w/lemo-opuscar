@@ -14,7 +14,7 @@ mix (duck, compress, balance) ──► mux with ffmpeg, two-pass loudnorm −14
 
 ## 1. Requirements and install
 
-System tools, which the user installs: **Node 20+**, **ffmpeg**, and **Python 3.11+** or [uv](https://docs.astral.sh/uv/). Developed on macOS (Apple silicon); Linux should work; on Windows use WSL. 3D and shader-heavy styles want a GPU.
+System tools, which the user installs: **Node 20+**, **ffmpeg**, and **Python 3.11+** or [uv](https://docs.astral.sh/uv/). Developed on macOS (Apple silicon); Linux should work; on Windows use WSL. 3D and shader-heavy styles want a GPU. Local voice synthesis is different: the Index-TTS clone (§4) **needs a GPU with enough free VRAM** and refuses to start without it, so free the card before the voice step ([`MAINTAINING.md`](MAINTAINING.md), the audio section).
 
 Everything else installs in tiers, from the library root (`$LIB` in skill mode). Install a tier only when the film needs it:
 
@@ -64,7 +64,7 @@ Rules that keep it reliable:
 - **Canvas 2D** for most 2D styles; **three.js** for 3D (§9); **WebGL2** shaders for post passes (film damage, CRT, ink redraw).
 - **Animate on twos where the style wants it** (12 fps stepping for stop-motion, pixel or cel looks), but keep the camera and light smooth every frame. A stepped camera reads as lag.
 - **One world → screen function.** Any effect that follows a subject (iris, zoom, spotlight) goes through it. Never hand-type screen coordinates.
-- **Draw for the frame you render.** The default is 1920×1080; for another size pass `--size WxH` (e.g. `1080x1920`) to every render tool and lay the page out from `innerWidth` × `innerHeight`.
+- **Draw for the frame you render.** The default is 1920×1080; for another size pass `--size WxH` (e.g. `1080x1920`) to every render tool and lay the page out from `innerWidth` × `innerHeight`. A film that still draws at absolute 1920×1080 pixels is **cropped** at any other size; to make one compose correctly at several ratios (and declare it in `FILM_META.aspects` so the tools can warn before cropping), see [`MAINTAINING.md`](MAINTAINING.md) "Let a film support more than one aspect". The ratio→pixel table is `core/render/size.mjs` (`RATIOS` / `DEFAULT_RATIO` / `resolveSize`): the publishing flow (orchestrator / console) defaults to **9:16** and passes the size down explicitly, while these low-level tools keep **1920×1080** as their own default — all 43 demos' `build.sh` call them without `--size`, so moving the default down here would break every demo.
 
 Capture (`core/render/`):
 
@@ -92,11 +92,13 @@ A small script (`cuecheck.py`, in `styles/<slug>/demo/tools/` of several demos) 
 
 ## 4. Voice
 
+- **A language version is a content file, not a flag on the drawing code.** `"lang"` in `content.json` selects the fonts, the tracking, the roundel number prefix and the voice; `--lang <code>` (the orchestrator) only swaps `content=X.json` for `X.<code>.json` and sends it to **both** the picture and the event side. The registry is `core/lang/lang.mjs` (`LANGS`); the Chinese default is `core/lang/fonts-zh.css` plus the subset woff2 in `core/lang/fonts/` — its `roman` face is a **font stack**, so Latin inside a Chinese page (`Coffea arabica`, `1400—1900`, `Lemo`) keeps its own glyphs. Adding a language is one entry in `LANGS`.
 - **TTS is only the default.** If the user brings a recording or names a voice, use that. Otherwise:
   - **English**: [Kokoro](https://github.com/thewh1teagle/kokoro-onnx), local, many voices (an unknown `voice` name makes `tts.py` print the full list; `af_` / `am_` are American, `bf_` / `bm_` British; cast the narrator for this film, not the demo's). `core/tts/tts.py lines.json out/` writes one WAV per line and a durations file. Its Chinese voices (`"lang": "cmn"`) work offline but sound plain.
   - **Chinese**: `core/tts/tts_zh.py lines.json out/` uses [edge-tts](https://github.com/rany2/edge-tts) with Microsoft's neural voices (`zh-CN-XiaoxiaoNeural`, `zh-CN-YunxiNeural`…), with the same outputs as `tts.py`, a rate per line and the silence trimmed. **It needs a network connection.**
+  - **Local zero-shot clone**: `core/tts/tts_indextts.py` drives a locally installed **Index-TTS 2.5** portable app (Windows). Offline, and it clones a **reference clip** — so the narrator can match a real speaker. Here `voice` is that clip (an alias, `voice_01`…, or a `.wav` path), **not** a voice name; `speed` maps to the model's `duration_factor`. The script re-executes itself under the app's own venv and synthesises **every line in one process** (the model is 3.2 GB — never one call per line; it needs a free GPU, §1). Which engine runs is the content file's `voice.engine` (`kokoro` by default, `indextts` for the clone); there is no command-line switch, so one content file carries language + fonts + voice + engine together.
 - Spell numbers out in the TTS text and write them as digits in the subtitles.
-- **Check every line**: `core/tts/asr_check.py` transcribes each WAV with faster-whisper and compares it with the script (`--lang zh`: character by character); re-generate until it exits 0. A misheard character in a short Chinese line is normal: listen, and if it is right, put what the model heard in the line's `asr` field. It also writes word timestamps for placing lines and subtitles.
+- **Check every line**: `core/tts/asr_check.py` transcribes each WAV with faster-whisper and compares it with the script (`--lang zh`: character by character); re-generate until it exits 0. A misheard character in a short Chinese line is normal: listen, and if it is right, put what the model heard in the line's `asr` field. It also writes word timestamps for placing lines and subtitles. The Chinese path **skips this check on purpose** — Whisper mishears Chinese badly (measured 9/9 lines differ, similarity 0.20–0.57) and does not normalise 十/百/千, so a correct line still fails; the skip is decided by `lang` in `lines.json`.
 - **Before mixing**: TTS has a high peak-to-average ratio. Compress the voice first, then balance by RMS: voice about 10 dB above the music.
 
 ## 5. Music

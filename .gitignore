@@ -97,6 +97,33 @@ styles/*/demo/PRODUCTION_LOG*
 /docs/social/
 
 
+# ---- 2026-10-06 补：生成物 ignore（判据 = 「**能不能由本仓内脚本重新生成**」：能 ⇒ ignore；不能 ⇒ 必须提交）----
+# 由来：WSL 侧提交后仍有 81 条未提交，其中大部分是**流水线产物**（换个宿主跑一遍就变）。
+# 逐条核过「生成它的脚本在不在仓库里」—— 都在，故都可重新生成。每条注明是哪个脚本生成的：
+#   · voices/dur.json       ← core/tts/tts.py、core/tts/tts_zh.py、core/tts/tts_indextts.py（TTS 实测时长）
+#   · voices/words.json     ← core/tts/asr_check.py（whisper 逐词时间戳）
+#   · voices/words_rel.json ← styles/<slug>/demo/tools/words.py
+#   · voices/lips.json      ← styles/scifi-toon/demo/voice.py（口型表）
+#   · music/score.json      ← styles/<slug>/demo/music/score.py
+#   · <slug>.srt            ← core/render/srt.py（各 demo 的 subs.py / tools/srt.py 调用它）
+#   · music/timing_report.txt ← styles/<slug>/demo/music/music.py（响度/频段报告）
+# ★ 口径与 scripts/check-dual-copy-sync.mjs 的「生成物」判定**故意一致**（那套闸门也只把这些列 backlog、不判 FAIL）。
+# ★★ 注意：这些文件**绝大多数已经被跟踪**（不是未跟踪）。`.gitignore` 只对**未跟踪**文件生效
+#   ⇒ 本段规则的实际作用是「**以后**新风格/新产物不会再被 `git add` 带进库」，
+#   **不会**让已经在库里的那些从 `git status` 消失（要消失得先 `git rm --cached`；本次**没做**）。
+styles/*/demo/voices/*.json
+styles/*/demo/voices_raw/*.json
+styles/*/demo/music/score.json
+styles/*/*.srt
+styles/*/demo/music/timing_report*.txt
+# 临时/备份（口径同闸门第 5 条：_tmp/.tmp/.bak/.old/.swp；`*.orig-*` 上面已有）
+*_tmp*
+*.tmp
+*.bak*
+*.old
+*.swp
+
+
 # ---- 2026-10-06 运行期素材例外（新克隆缺这些就出片失败；每条都先量过体积再决定）----
 # 说明：下面这些 `!` 例外必须放在所有同类 ignore 规则**之后**（gitignore 最后一条匹配者胜），
 # 所以统一收在文件末尾，不要往上挪。

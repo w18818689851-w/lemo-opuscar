@@ -11,11 +11,11 @@ You are the director, not a tech demo. A film is judged in this order: **sound, 
 The user gives a style and a topic, sometimes more (length, language, voice, must-have shots, brand rules). Everything else is your decision. Ask once, in a single message (AGENTS.md, Workflow), then no more questions. Defaults:
 
 - Length **30–60 s**; shorter and tight beats padded. Beyond two or three minutes multiplies time and token cost: tell the user.
-- 1920×1080 at 24 fps by default; other sizes (vertical 1080×1920, for example) with `--size WxH` on the render tools.
+- 1920×1080 at 24 fps by default; other sizes (vertical 1080×1920, for example) with `--size WxH` on the render tools. (The publishing flow defaults to **9:16** and passes the size down; the render tools themselves keep 1920×1080 — see TECHNIQUE.md §2.)
 - Voice and subtitles in the language the user writes in. Subtitles burned in and exported as `.srt`.
 - Loudness −14 LUFS.
 
-Say it in the questions when it matters: a good Chinese voice uses Microsoft's online service (edge-tts) and needs a connection; offline, Kokoro reads Chinese but sounds plain (TECHNIQUE.md §4).
+Say it in the questions when it matters: a good Chinese voice uses Microsoft's online service (edge-tts) and needs a connection; offline, Kokoro reads Chinese but sounds plain, and a locally installed Index-TTS can clone a reference clip (TECHNIQUE.md §4) but needs a free GPU — free the card before the voice step.
 
 Requests that only change the plan:
 
