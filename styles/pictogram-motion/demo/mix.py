@@ -6,9 +6,9 @@
 本 demo 的音频是「另一套架构」：配乐由 `music/music.py` 直出 `music/music.wav`
 （母带 −14 LUFS / TP ≤ −1 dBTP，无配音），成片由自带的 `mux.sh` 直混那份 wav，
 **从来没有 `mix.wav` 这个概念**。而编排器 `lemo-make.mjs` 的混音步只在
-`$D/mix.py` / `$D/sound.py` / `$D/audio/mix.py` 三个名字里找脚本（`lemo-make.mjs:2066-2068`），
+`$D/mix.py` / `$D/sound.py` / `$D/audio/mix.py` 三个名字里找脚本（`lemo-make.mjs` 的混音脚本候选），
 一个都没有时报 `STEP_FAIL 该 demo 没有 mix.py / sound.py / audio/mix.py —— 它用的是另一套音频架构`
-（`lemo-make.mjs:2290-2297`）⇒ 本风格走不了编排器的音频链。
+（`lemo-make.mjs` 的混音步）⇒ 本风格走不了编排器的音频链。
 
 本壳不重写 `music.py` 的逻辑、也不碰视频，只按本 demo 自己的构建顺序（`DEMO.md`「Build notes」1–2 步）
 把既有脚本串起来，再把结果落到编排器契约位置 `demo/mix.wav`：

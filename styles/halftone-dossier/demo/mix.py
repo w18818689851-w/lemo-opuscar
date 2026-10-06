@@ -6,9 +6,9 @@
 （纯 numpy/scipy、`default_rng(7)` 确定性、**无配音、无外部素材**），产物默认是
 demo/music.wav。原来没有独立的混音步骤，demo/mix.wav 就是 `python music.py mix.wav`
 的产物。而编排器 lemo-make.mjs 的混音步只认三个候选文件名
-（demo/mix.py → demo/sound.py → demo/audio/mix.py，见 lemo-make.mjs:2066-2068），
+（demo/mix.py → demo/sound.py → demo/audio/mix.py，见 lemo-make.mjs 的混音脚本候选），
 一个都找不到就报 `STEP_FAIL 该 demo 没有 mix.py / sound.py / audio/mix.py` 并 exit 1
-（lemo-make.mjs:2290-2297）—— 本风格因此**根本走不了「主题出片」通路**（只能 --skip-audio）。
+（见 lemo-make.mjs 的混音步）—— 本风格因此**根本走不了「主题出片」通路**（只能 --skip-audio）。
 ★ 这是「形态不匹配」而不是「没有音频链」：音频链是完整真实的，只是没落在那三个文件名上。
 
 本壳做的事（**薄壳，不重写任何配乐逻辑**）：
@@ -20,8 +20,8 @@ demo/music.wav。原来没有独立的混音步骤，demo/mix.wav 就是 `python
 契约（照编排器实际调用来写）：
   · **不接受任何命令行参数**（编排器是 `.venv/bin/python "$D/mix.py"`，不带参数调用）；
   · 所有路径都用 `__file__` 的绝对目录推导 —— 编排器的工作目录是**库根**（`cd "$LIB"`，
-    见 lemo-make.mjs:1972），不是 demo/，所以不能依赖 cwd；
-  · 产物落点必须是 demo/mix.wav（编排器的首选落点，lemo-make.mjs:2307）；
+    见 lemo-make.mjs 音频脚本开头的 cd "$LIB"），不是 demo/，所以不能依赖 cwd；
+  · 产物落点必须是 demo/mix.wav（编排器的首选落点，见 lemo-make.mjs 的 mix.wav 落点探测）；
   · 只管音频，**不碰任何视频**；
   · 幂等：music.py 是 seed 7 确定性的，重复跑逐字节一致（实测同一份 md5）。
 """
