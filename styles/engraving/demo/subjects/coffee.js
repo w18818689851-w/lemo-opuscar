@@ -8,7 +8,7 @@
 //   ink groups, in cutting order: 'ol0' (the branch margin — the one long line the burin cuts first),
 //   'ol' (outlines, midribs, veins, stamens), 'h1', 'h2', 'h3' (three hatching families).
 //   regions: leaf, flower, cherry, stem, bean      (the hand-colourist's areas)
-//   focus: flower, cherry, seed, leaf, harbour (+ eye, the fallback film.js:58 relies on)
+//   focus: flower, cherry, seed, leaf, harbour (+ eye, the fallback `demo/film.js:88` relies on)
 //
 // The plate is cut in two passes. Everything is measured first, so that whatever stands in front
 // (a flower, a cherry) can be handed to the hatching behind it as `excl`: the burin stops at the

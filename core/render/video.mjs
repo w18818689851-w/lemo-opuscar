@@ -57,7 +57,7 @@ try {
 if (vramPre) {
   const needMiB = Number(process.env.LEMO_RENDER_MIN_FREE_MIB ?? 3000);
   // ★ onShort:'continue' —— 渲染侧**只腾挪、不中止**，理由（别改成硬拦）：
-  //   编排器 lemo-make.mjs:2428 把「音频链（含 Index-TTS）」与「渲染」用 Promise.all **并行**跑，
+  //   编排器 `lemo-make.mjs:2735` 把「音频链（含 Index-TTS）」与「渲染」用 Promise.all **并行**跑，
   //   TTS 占着 6.9GB 时可用显存本来就只有几百 MiB ⇒ 硬拦会把**主题通路**整个打断。
   //   而渲染（Chromium + h264_nvenc，实测峰值增量 ~1.5GB）**不是**会静默挂死的那一步 ——
   //   硬拦该在 dub 的 TTS 那一侧（core/tts/tts_indextts.py 会挂死一个多小时）。

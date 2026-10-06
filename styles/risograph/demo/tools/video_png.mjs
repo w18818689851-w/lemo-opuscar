@@ -42,7 +42,7 @@ fs.writeFileSync(list, [...Array(WK)].map((_, w) => `file 'seg_${w}.mp4'`).filte
 // ★ stdio 必须显式给成 ['ignore','inherit','inherit'] —— 与 core/render/video.mjs 的拼接那一行**逐字一致**。
 //   本文件是它的副本，但这一处**漂移**过：默认 stdio 是 ['pipe','pipe','pipe']，而在本机（Windows + 本 Node 22）
 //   spawnSync/execFileSync **只要走 pipe 就 EBUSY**（实测：默认 → EBUSY；'ignore'/'inherit' → status 0；
-//   连 `spawnSync('cmd.exe',['/c','echo','hi'])` 都一样）。core 版早就显式传了这个选项（见 lemo-make.mjs:261
+//   连 `spawnSync('cmd.exe',['/c','echo','hi'])` 都一样）。core 版早就显式传了这个选项（见 `lemo-make.mjs:261`
 //   的同一条「本环境 spawnSync 一律 EBUSY」记载），副本漏掉了 ⇒ 拼接一步**必失败**（exit 1，
 //   前 6 个分段全部白渲）。改成 inherit 还顺带让 ffmpeg 的报错能真的打到 stderr（pipe 时被 execFileSync 吞掉）。
 execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', out],
