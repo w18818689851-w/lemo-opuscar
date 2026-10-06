@@ -43,7 +43,11 @@ ONLY=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --only) shift; while [ $# -gt 0 ] && [ "${1#--}" = "$1" ]; do ONLY="$ONLY $1"; shift; done ;;
-    -h|--help) sed -n '2,26p' "$0"; exit 0 ;;
+    -h|--help)
+      # ★ 不硬编码行号：取第 2 行起的**头注释连续块**（到第一条非 `#` 行为止）。
+      #   旧写法 `sed -n '2,26p'` 在头注释增减行时会截断/漂移（改注释即改 help）。
+      awk 'NR==1{next} /^#/{print;next} {exit}' "$0"
+      exit 0 ;;
     *) echo "未知参数: $1（用法见 bash $0 --help）" >&2; exit 2 ;;
   esac
 done
