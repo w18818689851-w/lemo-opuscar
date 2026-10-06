@@ -116,7 +116,7 @@ styles/*/demo/PRODUCTION_LOG*
 #   · voices/lips.json      ← styles/scifi-toon/demo/voice.py（口型表）
 #   · music/score.json      ← styles/<slug>/demo/music/score.py
 #   · <slug>.srt            ← core/render/srt.py（各 demo 的 subs.py / tools/srt.py 调用它）
-#   · music/timing_report.txt ← styles/<slug>/demo/music/music.py（响度/频段报告）
+#   · music/timing_report.txt ← styles/engraving/demo/music/score.py（卡点校验报告）
 # ★ 口径与 scripts/check-dual-copy-sync.mjs 的「生成物」判定**故意一致**（那套闸门也只把这些列 backlog、不判 FAIL）。
 # ★★ 注意：这些文件**绝大多数已经被跟踪**（不是未跟踪）。`.gitignore` 只对**未跟踪**文件生效
 #   ⇒ 本段规则的实际作用是「**以后**新风格/新产物不会再被 `git add` 带进库」，
