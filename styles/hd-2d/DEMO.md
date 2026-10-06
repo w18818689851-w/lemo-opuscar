@@ -103,7 +103,7 @@ All commands from the repo root. `.venv` is the shared Python env (kokoro-onnx, 
 ```sh
 PY=.venv/bin/python; D=styles/hd-2d/demo
 
-# 0. fresh clone: voices/*.wav, music/score.wav and mix.wav are git-ignored (rebuilt below); if music/src/ is empty, fetch the source
+# 0. fresh clone: voices/*.wav, music/score.wav, mix.wav and music/src/sb_precipice.mp3 are git-ignored (rebuilt or fetched below)
 curl -L -o $D/music/src/sb_precipice.mp3 https://www.scottbuckley.com.au/library/wp-content/uploads/2021/01/sb_precipice.mp3
 
 # 1. voices (Kokoro) + whisper check → voices/*.wav, dur.json, words.json

@@ -41,8 +41,11 @@ styles/*/demo/music.wav
 # 赛事官方图，只作参考、不分发（片中标识怎么处理开源前再定）
 styles/pictogram-motion/demo/ref/
 # 2026-10-06: 原来这里有一条 `styles/*/demo/music/src/`，把配乐**源文件**也挡了 ——
-# hd-2d 的 music/src/sb_precipice.mp3（4.76 MB）是 music/edit.py 的输入、无法重建，
-# 缺了它新克隆跑不了该 demo 的配乐。源文件属「输入素材」要提交，故移除该条（体积实测见文件末尾）。
+# hd-2d 的 music/src/sb_precipice.mp3（实测 4,757,610 B）是 music/edit.py 的输入、本地合成不出来，
+# 缺了它新克隆跑不了该 demo 的配乐。故移除该条（留着它连 CREDITS 给的直链也救不回来）。
+# ★ 同日稍后又加过一条 `!styles/*/demo/music/src/*.mp3` 点名放行、把该 mp3 提交进了库；
+#   该放行**已撤回**（见文件末尾「3)」）。政策是 MAINTAINING.md:14 那句：音频一律留在本地、
+#   由 CREDITS 记下来源供新克隆重取 —— 仓库里 9 个配乐 mp3 只有它一个进过库，是孤例。
 
 # ---- 2026-09-26 GitHub 发布前补充 ----
 # 内部工作文件（不公开）
@@ -154,8 +157,13 @@ styles/*/demo/music/timing_report*.txt
 #    以及 tools/release.py 的 5 MB 上限互相打架：Monkeys_Spinning_Monkeys.mp3 = 5,005,207 B
 #    ⇒ `release.py check` 报 `too big`、publish.sh 第一步（set -e）就中止。该放行已撤回。
 #
-# 3) hd-2d 的配乐源文件（music/src/sb_precipice.mp3，4.76 MB，music/edit.py 的输入）
-#    同样被 `styles/*/demo/**/*.mp3` 挡着 —— 上面删掉 `styles/*/demo/music/src/` 还不够，
-#    这里点名放行 music/src/ 下的 mp3 源文件（实测 1 文件 / 4.76 MB）：
-!styles/*/demo/music/src/*.mp3
+# 3) hd-2d 的配乐源文件（music/src/sb_precipice.mp3，实测 4,757,610 B = 4.76 MB，
+#    music/edit.py 的输入）**不入库** —— 由 `styles/*/demo/**/*.mp3` 挡住，与 watercolor /
+#    paper-lantern / paper-popup / brick-toy 同一套做法：demo/CREDITS 记了 Scott Buckley 的直链
+#    （CC BY 4.0），新克隆按它重新下载即可（DEMO.md 第 0 步给了 curl）。
+#    ★ 2026-10-06 这里曾点名放行（`!styles/*/demo/music/src/*.mp3`）并把该 mp3 提交进库，
+#    与 MAINTAINING.md:14（音频一律本地、CREDITS 记来源）以及 CREDITS/DEMO.md 自己那句
+#    「新克隆重下」互相打架；且 tools/release.py 的 MAX_MB=5 余量只剩 0.24 MB
+#    （4,757,610 B vs 5,000,000 B —— brick-toy 的 5,005,207 B 就是在这条上限上咬过一次）。
+#    该放行已撤回，该文件已 `git rm --cached`（文件仍在磁盘）。
 

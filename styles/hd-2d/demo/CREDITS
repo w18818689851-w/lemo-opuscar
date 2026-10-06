@@ -10,8 +10,10 @@ UI artwork are original.
 Music
 - "Precipice" by Scott Buckley — https://www.scottbuckley.com.au/library/precipice/
   License: Creative Commons Attribution 4.0 International (CC BY 4.0) — https://creativecommons.org/licenses/by/4.0/
-  Source file: music/src/sb_precipice.mp3 (direct link:
-  https://www.scottbuckley.com.au/library/wp-content/uploads/2021/01/sb_precipice.mp3)
+  Source file: music/src/sb_precipice.mp3 — .gitignore'd (styles/*/demo/**/*.mp3), so a fresh clone
+  must re-fetch it (DEMO.md step 0 has the curl; it is the input to music/edit.py and the score
+  cannot be rebuilt without it):
+  https://www.scottbuckley.com.au/library/wp-content/uploads/2021/01/sb_precipice.mp3
   Changes: cut, re-timed and level-automated for this film by music/edit.py (edit list in music/CUES.md).
   Attribution is shown on screen in the title card and in music/CREDITS.txt.
 
