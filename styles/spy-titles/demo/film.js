@@ -28,7 +28,7 @@ const STEP = BEAT * 2;   // 一个跑步循环 = 2 拍（每步 1 拍）
 let LINES = [], DURS = {};
 export function setLines(l, d) { LINES = l; DURS = d; }
 export function subs() {
-  return LINES.map(L => { const d = DURS[L.id]; return { t0: L.t, t1: L.t + Math.max(1.8, d + .6), text: L.text, id: L.id }; });
+  return LINES.map(L => { const d = DURS[L.id] || 2; return { t0: L.t, t1: L.t + Math.max(1.8, d + .6), text: L.text, id: L.id }; });
 }
 const DARK_SUB = { l2: true, l6: true };   // 纸白底场景用墨黑纸条
 function drawSubs(t) {

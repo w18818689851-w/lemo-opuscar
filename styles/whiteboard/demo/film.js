@@ -19,10 +19,25 @@ export const VO = {
 };
 export const END = 111;
 
+// voices/words.json 是**生成物**（.gitignore:124，未构建时不在检出里）。真表是 whisper 在配音上打的逐词
+// 时间戳（相对本句 VO 起点）：[word, start, end]。缺失时合成一张同形的表：把本句 (asr || text) 的词在
+// [本句 VO, 下一句 VO) 内均分 ⇒ at()/atS()/atE() 仍能按词命中，笔画节奏变成均匀的近似（不是空表）。
+async function voicesWords(lines) {
+  try { const r = await fetch('voices/words.json'); if (r.ok) return await r.json(); } catch (e) { }
+  const ids = Object.keys(VO), out = {};
+  ids.forEach((id, i) => {
+    const L = lines.find(l => l.id === id); if (!L) { out[id] = []; return; }
+    const t0 = VO[id], t1 = i + 1 < ids.length ? VO[ids[i + 1]] : END;
+    const toks = (L.asr || L.text).split(/\s+/).filter(Boolean), step = (t1 - t0) / toks.length;
+    out[id] = toks.map((x, k) => [x, k * step, (k + 1) * step]);
+  });
+  return out;
+}
+
 export async function build() {
   await W.loadFont('tech', 'fonts/EMSTech.json');
-  const words = await (await fetch('voices/words.json')).json();
   const lines = await (await fetch('lines.json')).json();
+  const words = await voicesWords(lines);
   const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, '');
   const at = (id, w, k = 0, which = 1) => {          // absolute time of the k-th occurrence of word w in line id
     let n = 0; for (const x of words[id]) if (norm(x[0]).startsWith(norm(w)) && n++ === k) return VO[id] + Math.max(0, x[which]);

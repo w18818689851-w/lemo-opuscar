@@ -301,7 +301,7 @@ def main():
     src, out = pos
     if np is None:
         die('缺少 numpy —— 本脚本用 WSL 库自带的 venv python 跑：'
-            '/home/lemo/lemo-opuscar/.venv/bin/python core/tts/voice_ref.py …')
+            '<仓库根>/.venv/bin/python core/tts/voice_ref.py …')
     if not os.path.isfile(src):
         die('源文件不存在：%s' % src)
 

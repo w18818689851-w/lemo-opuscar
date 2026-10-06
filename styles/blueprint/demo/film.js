@@ -47,7 +47,7 @@ const SUBPOS = { v1: [940, 300], v2: [1000, 300], v3: [1180, 860], v4: [1180, 86
 const NOTETEXT = { v1: 'An apparatus for catching clouds.', v2: 'Thirteen parts, one bellows, one rather optimistic net.', v3: 'Works beautifully. No clouds on this sheet.', v4: 'Revision issued (see REV. 1).', v5: 'It rained on the drawing.', v6: 'Status: works. Slightly damp.' };
 export function setLines(lines, dur) { LINES = lines; DURS = dur; }
 export function subs() {
-  const ids = Object.keys(VO); return ids.map((id, i) => { const t0 = VO[id], L = LINES.find(l => l.id === id); let t1 = Math.max(t0 + DURS[id] + .6, t0 + 1.8); const nx = ids[i + 1]; if (nx) t1 = Math.min(t1 + .3, VO[nx] - .1); if (id === 'v4') t1 = Math.min(t1, B(14) - .1); if (id === 'v5') t1 = Math.min(t1, 38.95); return { id, n: i + 1, t0, t1, text: L ? L.text : '' }; });
+  const ids = Object.keys(VO); return ids.map((id, i) => { const t0 = VO[id], L = LINES.find(l => l.id === id); let t1 = Math.max(t0 + (DURS[id] || 2) + .6, t0 + 1.8); const nx = ids[i + 1]; if (nx) t1 = Math.min(t1 + .3, VO[nx] - .1); if (id === 'v4') t1 = Math.min(t1, B(14) - .1); if (id === 'v5') t1 = Math.min(t1, 38.95); return { id, n: i + 1, t0, t1, text: L ? L.text : '' }; });
 }
 function subtitle(n, str, u, a, x0, y0, maxW = 880) {
   if (a <= 0) return;

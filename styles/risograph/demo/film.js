@@ -37,7 +37,7 @@ ev(0, 'ride', { t1: 2, v: 1 }); ev(2, 'ride', { t1: 8, v: .8 }); ev(8, 'ride', {
 // 旁白（lines.json 的 t + dur.json）
 let LINES = [];
 export function setLines(lines, dur) {
-  LINES = lines.map(l => ({ ...l, dur: dur[l.id] }));
+  LINES = lines.map(l => ({ ...l, dur: dur[l.id] || 2 }));
   LINES.forEach((l, i) => { const nx = LINES[i + 1] ? LINES[i + 1].t : 1e9; l.t0 = l.t; l.t1 = Math.min(nx - .05, Math.max(l.t + l.dur + .7, l.t + 1.8)); ev(l.t, 'vo', { id: l.id }); });
 }
 export const subs = () => LINES.map(l => ({ t0: l.t0, t1: l.t1, text: l.text }));

@@ -137,7 +137,7 @@ export function build(words) {
     v08: 'You get a clear plan, and nothing changes until you say go.', v09: 'Every edit shows up as a {diff}.', v10: 'Click any line, leave a note,', v11: 'and Claude {revises} it.',
     v12: 'Then it checks its own work.', v13: 'It runs your app in the {preview}, and clicks through it, just like you would.', v14: 'Got more to do? Start another {session}.', v15: 'They work {side by side}.' };
   const dur = words.__dur;
-  for (const [id, t] of Object.entries(VO)) { ev(t, 'vo', { id }); if (cap[id]) SUBS.push({ id, t0: t - .05, t1: t + dur[id] + .25, text: cap[id] }); }
+  for (const [id, t] of Object.entries(VO)) { ev(t, 'vo', { id }); if (cap[id]) SUBS.push({ id, t0: t - .05, t1: t + (dur[id] || 2) + .25, text: cap[id] }); }
 
   // ═════ A. 冷开场：终端 → Clawd 化身 → 跳进 Claude 应用（0–10.2）
   TY.term = typing(.45, 'claude', 9, 3, 'tkey'); ev(1.35, 'tenter');

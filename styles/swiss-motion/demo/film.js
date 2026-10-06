@@ -42,7 +42,7 @@ export function setLines(lines, dur) {
   LINES = lines.map(L => {
     const i = L.text.indexOf('. '), [end, pos, soft] = LAYOUT[L.id];
     const small = L.id === 'l5b' ? '' : L.text.slice(0, i + 1), big = L.id === 'l5b' ? L.text : L.text.slice(i + 2);
-    return { id: L.id, t: L.t, dur: dur[L.id], end, pos, soft, small, big, text: L.text };
+    return { id: L.id, t: L.t, dur: dur[L.id] || 2, end, pos, soft, small, big, text: L.text };
   });
 }
 export const subs = () => LINES.map(L => ({ t0: L.t, t1: Math.min(L.end, L.id === 'l5' ? 24.5 : L.end), text: L.text }));

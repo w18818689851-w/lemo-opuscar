@@ -11,7 +11,7 @@
 
 Needs the GitHub CLI (`gh auth login`) for upload and verify. Usually run through tools/publish.sh.
 """
-import glob, hashlib, json, os, re, shutil, subprocess, sys, tarfile, tempfile
+import glob, hashlib, io, json, os, re, shutil, subprocess, sys, tarfile, tempfile, tokenize
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 REPO = 'lemomo-ai/lemo-opuscar'
@@ -35,6 +35,105 @@ BINARY = re.compile(r'\.(jpe?g|png|gif|webp|ico|mp4|mov|mp3|wav|ogg|flac|woff2?|
 IMG = r'[A-Za-z0-9_.*?<>{}-]+(?:/[A-Za-z0-9_.*?<>{}-]+)*\.(?:jpe?g|png|webp|gif)'
 STILL_PATH = re.compile(r'(?:styles/([a-z0-9-]+)/)?demo/stills/(' + IMG + ')', re.I)
 STILL_NAME = re.compile(r'(?<![\w/.*-])([A-Za-z0-9_][A-Za-z0-9_.*-]*\.(?:jpe?g|png|webp|gif))(?![\w/*-])', re.I)
+
+# ★ 2026-10-06 LOCAL_PATH 先剥「散文」再匹配（下面 prose_free）。由来（实测的 5 处假红）：判据原来直接对
+#   整份字节匹配，而**注释/docstring 里的示例路径也是文本** ⇒ 一句话「**不写死** /home/lemo/... 之类的主机
+#   绝对路径」（tools/fetch-fonts.sh:29）被当成写死了路径；core/tts/voice_ref.py:9 与
+#   styles/paper-lantern/demo/tts_local.py:26 是 docstring 里的 wsl 用法示例；core/tts/tts_indextts.py:944、
+#   styles/game-show/demo/make_voices_kokoro.py:31 是 `#` 注释。**与 check-esm-import-paths 同一类缺陷**：
+#   匹配对象是代码时，注释绝不算数。
+#   ★ 但**字符串字面量必须保留**：`PATH = '/home/lemo/x'` 正是本判据要抓的（判据不能因为「它在引号里」
+#   就放行）。故只剥注释与 docstring，不剥字符串。
+
+
+def prose_free(data, path):
+    """`data` with the comments (and, for Python, the docstrings) blanked out —— so LOCAL_PATH reads **code**.
+    Handled: `.py` (comments + docstrings), `.sh`/`.bash`, `.js`/`.mjs`/`.cjs`/`.ts`. Anything else (`.md`,
+    `.json`, …) has no comment syntax here and is returned as is. String literals are kept (see the note above)."""
+    ext = os.path.splitext(path)[1].lower()
+    if ext == '.py':
+        out = strip_python(data)
+        return out if out is not None else strip_hash(data)     # a file that won't tokenize: at least drop `#` comments
+    if ext in ('.sh', '.bash'):
+        return strip_hash(data)
+    if ext in ('.js', '.mjs', '.cjs', '.ts'):
+        return strip_slash(data)
+    return data
+
+
+def strip_python(data):
+    """Blank Python comments and docstrings; keep string literals. None when the file does not tokenize.
+
+    A docstring is a string literal that **starts a statement** —— only NEWLINE / INDENT / DEDENT (or the start
+    of the file) may precede it, which is the rule CPython itself uses to fill `__doc__`. So a triple-quoted
+    string that is an argument (`print('''…''')`) or a value (`SQL = '''…'''`) is a string literal and stays."""
+    try:
+        enc, _ = tokenize.detect_encoding(io.BytesIO(data).readline)
+        text = data.decode(enc).replace('\r\n', '\n').replace('\r', '\n')
+    except (SyntaxError, LookupError, UnicodeDecodeError):
+        return None
+    try:
+        toks = list(tokenize.generate_tokens(io.StringIO(text).readline))
+    except (tokenize.TokenError, IndentationError, SyntaxError, ValueError):
+        return None
+    spans, prev, doc = [], None, False
+    for t in toks:
+        if t.type == tokenize.COMMENT:
+            spans.append((t.start, t.end))                      # a comment is never the previous significant token
+        elif t.type in (tokenize.NL, tokenize.ENCODING):
+            continue
+        elif t.type == tokenize.STRING and (prev is None or doc or prev.type in (tokenize.NEWLINE, tokenize.INDENT, tokenize.DEDENT)):
+            spans.append((t.start, t.end)); prev, doc = t, True
+        else:
+            prev, doc = t, False
+    return blank(text, spans).encode('utf-8')
+
+
+def strip_hash(data):
+    """Shell comments (`#` to end of line); also the fallback for a Python file the tokenizer refuses.
+    `#` counts only at a word boundary —— `$#`, `${x#y}` and `a#b` are parameters/words, not comments."""
+    return strip_marks(data, b'#', None, True)
+
+
+def strip_slash(data):
+    """JS/TS comments: `//` to end of line and `/* … */`. Quotes and template literals are copied through."""
+    return strip_marks(data, b'//', b'/*', False)
+
+
+def strip_marks(data, line, block, boundary):
+    """Blank comments in source bytes; quoted strings are copied through (a path inside a string is code).
+    Bytes are scanned directly —— UTF-8 and GBK never put an ASCII byte inside a multi-byte character, so a
+    byte-wise scan cannot split one (and the markers looked for are all ASCII)."""
+    out, i, n, q = bytearray(), 0, len(data), 0
+    while i < n:
+        c = data[i]
+        if q:
+            out.append(c)
+            if c == 0x5C and i + 1 < n: out.append(data[i + 1]); i += 2; continue    # backslash escape
+            if c == q: q = 0
+            i += 1; continue
+        if c in (0x22, 0x27, 0x60): q = c; out.append(c); i += 1; continue           # " ' `
+        if line and data.startswith(line, i) and (not boundary or i == 0 or data[i - 1] in b' \t\r\n'):
+            while i < n and data[i] != 0x0A: i += 1
+            continue
+        if block and data.startswith(block, i):
+            j = data.find(b'*/', i + 2); j = n if j < 0 else j + 2
+            out += b'\n' * data[i:j].count(0x0A); i = j; continue
+        out.append(c); i += 1
+    return bytes(out)
+
+
+def blank(text, spans):
+    """Replace each span —— (line, col) pairs as the tokenizer reports them, 1-based line —— with spaces,
+    keeping the newlines so the rest of the file keeps its line numbers."""
+    off, pos = [0], 0
+    for line in text.split('\n'):
+        pos += len(line) + 1; off.append(pos)
+    out = list(text)
+    for (sl, sc), (el, ec) in spans:
+        for i in range(off[sl - 1] + sc, min(off[el - 1] + ec, len(out))):
+            if out[i] != '\n': out[i] = ' '
+    return ''.join(out)
 
 
 def git(*a):
@@ -163,8 +262,10 @@ def check():
         if n > MAX_MB * 1e6: bad.append(f'too big ({n / 1e6:.1f} MB): {f}')
         elif not BINARY.search(f):
             b = open(p, 'rb').read()
-            if LOCAL_PATH.search(b): bad.append(f'local path: {f}')
-            if SECRET.search(b): bad.append(f'possible secret: {f}')
+            # 先看原始字节（便宜、纯 C 正则）；只有真的像命中时才剥注释/docstring 复核 —— 剥文本是 Python 级
+            # 循环，1684 个文件全跑会明显变慢，而假红只出现在「注释里提到路径」的那些文件上。
+            if LOCAL_PATH.search(b) and LOCAL_PATH.search(prose_free(b, f)): bad.append(f'local path: {f}')
+            if SECRET.search(b): bad.append(f'possible secret: {f}')     # ★ 秘密**不**剥散文：注释里的密钥照样是泄露
     print(f'git would hold {len(files)} files, {size / 1e6:.0f} MB')
     completeness(have, bad, warn, [s for s in style_slugs() if not args or s in args])
     if strict:

@@ -22,13 +22,30 @@ if (FIT) {
   hudEl.style.setProperty('--s', S); hudEl.style.setProperty('--fx', FX); hudEl.style.setProperty('--fy', FY);
 }
 
-const words = await (await fetch('voices/words.json')).json();
-words.__dur = await (await fetch('voices/dur.json')).json();
+// voices/words.json、voices/dur.json 是**生成物**（.gitignore:124，未构建时不在检出里）。
+// 真表是 whisper 在配音上打的逐词时间戳（相对本句 VO 起点）：[word, start, end]。
+// 缺失时**合成**一张同形的表：把本句 (asr || text) 的词在 [本句 VO, 下一句 VO) 内均分。
+// 这样 W()/WE() 仍能按词命中，影片骨架（打字、光标、字幕）照样成立 —— 只是节奏变成均匀的近似。
+const fetchJ = async (u, d) => { try { const r = await fetch(u); return r.ok ? await r.json() : d; } catch { return d; } };
+async function voicesWords() {
+  const w = await fetchJ('voices/words.json', null);
+  if (w) return w;
+  const lines = await fetchJ('lines.json', []), ids = Object.keys(FM.VO), out = {};
+  ids.forEach((id, i) => {
+    const L = lines.find(l => l.id === id); if (!L) { out[id] = []; return; }
+    const t0 = FM.VO[id], t1 = i + 1 < ids.length ? FM.VO[ids[i + 1]] : FM.DUR;
+    const toks = (L.asr || L.text).split(/\s+/).filter(Boolean), step = (t1 - t0) / toks.length;
+    out[id] = toks.map((x, k) => [x, k * step, (k + 1) * step]);
+  });
+  return out;
+}
+const words = await voicesWords();
+words.__dur = await fetchJ('voices/dur.json', {});
 FM.build(words);
 window.DUR = FM.DUR;
 window.EV = FM.EV.slice().sort((a, b) => a.t - b.t);
 window.SUBS = FM.SUBS.map(s => ({ t0: s.t0, t1: s.t1, text: s.text.replace(/[{}]/g, '') }))    // 片尾两句画面上已有大字，不烧录，但进 .srt
-  .concat([['v16', 'Claude Code.'], ['v17', 'Say it. Plan it. Review it. Ship it.']].map(([id, text]) => ({ t0: FM.VO[id] - .05, t1: FM.VO[id] + words.__dur[id] + .3, text })));
+  .concat([['v16', 'Claude Code.'], ['v17', 'Say it. Plan it. Review it. Ship it.']].map(([id, text]) => ({ t0: FM.VO[id] - .05, t1: FM.VO[id] + (words.__dur[id] || 2) + .3, text })));
 window.T = FM.T;
 
 const tf = ([cx, cy, z]) => `translate(960px,540px) scale(${z}) translate(${-cx}px,${-cy}px)`;

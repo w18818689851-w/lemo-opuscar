@@ -22,8 +22,8 @@ let g = G0;
 await initTerm();
 const Q = new URLSearchParams(location.search);
 const lines = await (await fetch('lines.json')).json();
-const words = await (await fetch('voices/words.json')).json();
-const vdur = await (await fetch('voices/dur.json')).json();
+let words = {}; try { const r = await fetch('voices/words.json'); if (r.ok) words = await r.json(); } catch (e) { }   // voices/ 是生成物（.gitignore:124），未构建时留空表
+let vdur = {}; try { const r = await fetch('voices/dur.json'); if (r.ok) vdur = await r.json(); } catch (e) { }
 
 const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
 const seg = (t, a, b) => clamp((t - a) / (b - a));
@@ -67,11 +67,11 @@ const STRIP = { y: 912, cw: 18, ox: 150 };        // 底部日志栏（字幕）
 // ======================= 旁白 / 字幕：随 whisper 逐词时间打出 =======================
 const VO = lines.map(L => {
   const txt = L.text.toUpperCase();
-  const tw = txt.split(' '), ww = words[L.id] || [];
+  const tw = txt.split(' '), ww = words[L.id] || [], vd = vdur[L.id] || 2;
   // 每个词在文本中的结束字符位置 → 该词念完的时刻
   const marks = []; let pos = 0;
-  tw.forEach((w, k) => { pos += w.length + (k ? 1 : 0); const wd = ww[k]; marks.push([wd ? Math.max(0, wd[1]) : k / tw.length * vdur[L.id], wd ? wd[2] : (k + 1) / tw.length * vdur[L.id], pos]); });
-  return { id: L.id, t: VOT[L.id], d: vdur[L.id], text: txt, sub: L.text, marks: ww.length === tw.length ? marks : null };
+  tw.forEach((w, k) => { pos += w.length + (k ? 1 : 0); const wd = ww[k]; marks.push([wd ? Math.max(0, wd[1]) : k / tw.length * vd, wd ? wd[2] : (k + 1) / tw.length * vd, pos]); });
+  return { id: L.id, t: VOT[L.id], d: vd, text: txt, sub: L.text, marks: ww.length === tw.length ? marks : null };
 });
 VO.forEach(v => ev(v.t, 'vo', { id: v.id }));
 function voChars(v, t) {
@@ -578,7 +578,7 @@ function sCard(t) {
 // ======================= 字幕（SRT） =======================
 const SUBS = VO.map(v => ({ t0: v.t, t1: Math.min(voEnd(v), ...VO.filter(o => o.t > v.t).map(o => o.t)), text: v.sub }));
 SUBS.push({ t0: MSG_T[0], t1: VOT.l2, text: '[SCREEN] IS ANYONE THERE?' });
-SUBS.push({ t0: VOT.l2 + vdur.l2 + .1, t1: VOT.l3, text: '[SCREEN] CAMERA NOT FOUND' });
+SUBS.push({ t0: VOT.l2 + (vdur.l2 || 2) + .1, t1: VOT.l3, text: '[SCREEN] CAMERA NOT FOUND' });
 SUBS.push({ t0: T.reply, t1: T.fall0 + .6, text: '[SCREEN] I AM STILL HERE.' });
 SUBS.push({ t0: T.smile, t1: VOT.l5, text: '[SCREEN] :)' });
 SUBS.sort((a, b) => a.t0 - b.t0);
