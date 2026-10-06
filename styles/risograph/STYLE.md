@@ -118,6 +118,28 @@ You decide the inks and what each plate means, the structure, characters (or non
 - Openings: **a knockout** (a blank shape in a full-colour field, filled by its plate seconds later); **dots first** (extreme close-up of halftone that pulls back into an image); **ghosts converge** (three colour ghosts drift together and snap into a readable frame on the first beat).
 - Endings: **one ink left** (plates lift away until the last line stands in one colour); **the print on a wall** (the last frame becomes a poster pasted up inside the world it showed); **a folded sheet** (the print folds into something the story needs: a boat, an envelope, a ticket).
 
+### 11.1 Aspect cost
+
+All five ratios in `FILM_META.aspects` are honest — **nothing is cropped and nothing is stretched** — but
+they are earned by **containing**, not by re-laying-out. This module still draws one fixed 1920×1080 design
+frame; `demo/index.html` scales that whole frame uniformly into the current frame and centres it, and the
+remainder is filled with `#F6F1E6` (the paper white). So a non-16:9 cut of this style is a **letterboxed**
+cut: the picture is complete, but it only fills part of the frame.
+
+| ratio | output | picture lands as | share of the frame |
+|---|---|---|---|
+| 16:9 | 1920×1080 | 1920×1080 | 100 % |
+| 9:16 | 1080×1920 | 1080×608 | 31.6 % |
+| 3:4 | 1440×1920 | 1440×810 | 42.2 % |
+| 4:3 | 1920×1440 | 1920×1080 | 75 % |
+| 1:1 | 1920×1920 | 1920×1080 | 56.25 % |
+
+If a delivery needs the picture to **fill** a non-16:9 frame, this style has to be re-laid-out instead of
+contained (positions × `fx`/`fy`, sizes × `S`; the rule and its silent traps are in
+[`MAINTAINING.md` → "Let a film support more than one aspect"](../../MAINTAINING.md)). Do **not** close the
+gap by scaling the design frame unevenly — that shears the picture. The bar colour is the style's own
+background on purpose, so a bar reads as part of the frame rather than as a bug.
+
 ---
 
 How our demo was made (story, shots, score, end card, build): [DEMO.md](DEMO.md). Read it after your treatment exists.

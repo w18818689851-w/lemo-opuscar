@@ -103,6 +103,29 @@ You decide the places, the characters, the light the story turns on, the chapter
 - Openings: **in the middle of the room** (a dialogue box already typing over a close 3/4 shot); **overhead map** (straight top-down, the band as a strip, then tilt down into the 3/4 view); **daylight** (a bright noon wide with no practicals at all, so the first lamp later is an event).
 - Endings: **a save point** (the hero rests at a small glowing object, the UI shows a save line, fade); **the band narrows** (the sharp strip thins onto one sprite until everything else is blur); **the party leaves frame** (a locked wide holds after the characters walk out; only ambience and flicker remain).
 
+### 11.1 Aspect cost
+
+All five ratios in `FILM_META.aspects` are honest — **nothing is cropped and nothing is stretched** — but
+they are earned by **containing**, not by re-laying-out. The film body (`main.js`, three.js + tilt-shift
+post — its `renderer.setSize(1920,1080)` deliberately does not follow the viewport) still draws one fixed
+1920×1080 design frame; `demo/index.html` scales that whole frame uniformly into the current frame and
+centres it, and the remainder is filled with `#0b1526` (the night-scene navy). So a non-16:9 cut of this
+style is a **letterboxed** cut: the picture is complete, but it only fills part of the frame.
+
+| ratio | output | picture lands as | share of the frame |
+|---|---|---|---|
+| 16:9 | 1920×1080 | 1920×1080 | 100 % |
+| 9:16 | 1080×1920 | 1080×608 | 31.6 % |
+| 3:4 | 1440×1920 | 1440×810 | 42.2 % |
+| 4:3 | 1920×1440 | 1920×1080 | 75 % |
+| 1:1 | 1920×1920 | 1920×1080 | 56.25 % |
+
+If a delivery needs the picture to **fill** a non-16:9 frame, this style has to be re-laid-out instead of
+contained (positions × `fx`/`fy`, sizes × `S`; the rule and its silent traps are in
+[`MAINTAINING.md` → "Let a film support more than one aspect"](../../MAINTAINING.md)). Do **not** close the
+gap by scaling the design frame unevenly — that shears the picture. The bar colour is the style's own
+background on purpose, so a bar reads as part of the frame rather than as a bug.
+
 ---
 
 How our demo was made (story, shots, score, end card, build): [DEMO.md](DEMO.md). Read it after your treatment exists.

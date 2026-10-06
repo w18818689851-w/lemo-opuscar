@@ -149,10 +149,45 @@ worked example; its rule is:
    node core/render/still.mjs styles/<slug>/demo 30.9 --q "film=<film>&nosub=1" --size 1080x1920 --out /tmp/a
    ```
 
-**Traps the worked example does not show.** Seven styles have since been migrated by the rule above
-(`engraving`, `dataviz`, `swiss-motion`, `silkscreen-poster`, `spy-titles`, `whiteboard`,
-`living-screencast`). Four traps recurred, and each is **silent** — a crop, a misalignment or a doubled
-zoom, never an exception — so only the step-6 render check catches them.
+**The census — `aspects` is a claim, so count it instead of remembering it.**
+
+```sh
+grep -ho "aspects: \[[^]]*\]" styles/*/demo/film.js | sort | uniq -c | sort -rn
+#   28  aspects: ['16:9', '9:16']
+#   14  aspects: ['16:9', '9:16', '3:4', '4:3', '1:1']
+```
+
+That is the whole census, and it is the only one to quote. Scope: `demo/film.js` only — the console probes
+`demo/film*.js` (`D:\lemo-tools\lib\aspects.mjs`), and `styles/engraving/demo/film_coffee.js` is a **second
+film** of the same style, so the glob over `film*.js` counts `engraving` twice (15, not 14). 42 of the 43
+styles have a `demo/film.js`; `pixel-rpg` has none (`_template` is a template, not a style). So the honest
+statement is: **14 styles claim five ratios, 28 claim two, 1 claims nothing** (declaring nothing means
+"16:9 only" — see step 5).
+
+**The policy: a declared ratio means "this ratio will not be cropped", and containing is a legitimate way
+to earn it.** Two implementations are in use, and **both are correct** — native re-layout is the *better*
+result, not a requirement:
+
+- **Re-layout — 10 styles.** The layout is re-derived from the real frame (`fx`/`fy`/`S`, step 2 above):
+  `engraving`, `dark-keynote`, `dataviz`, `one-line`, `silkscreen-poster`, `spy-titles`, `stained-glass`,
+  `swiss-motion`, `urban-sketch`, `woodcut`. The picture is composed *for* the frame, so there are no bars.
+- **Contain (等比装入) — 32 styles.** The design frame stays 1920×1080; the whole frame is scaled
+  uniformly into the current frame and centred, and the bars take the page's own background colour. The
+  picture is complete and undistorted, but it only fills part of the frame — at 9:16 (1080×1920) a
+  1920×1080 design frame lands as 1080×608, i.e. **31.6 %** of the pixels; at 3:4 (1440×1920) 42.2 %; at
+  4:3 (1920×1440) 75 %; at 1:1 (1920×1920) 56.25 %. The rest is bar. The **13 five-ratio styles** that
+  contain are `backrooms` (#000), `brick-toy` (#f4f4f1), `cel-anime-80s` (#1f2446), `game-show` (#F4ECDD),
+  `halftone-dossier` (#F4ECDD), `hd-2d` (#0b1526), `hologram-hud` (#02080A), `microgame` (#2a0f5c),
+  `paper-lantern` (#0a1330), `paper-popup` (#fffaf0), `pictogram-motion` (#fbf6ec), `risograph` (#F6F1E6),
+  `tilt-shift` (#8fb4d8) — each records its bar colour and its own cost in `STYLE.md §11.1`. The other 19
+  contain, but claim only 16:9 + 9:16.
+  *Some styles do both*: `dark-keynote` contains its **world** and re-lays-out its **screen furniture**
+  (bars, captions, end card) — judge a style by what its own header comment says, not by the two labels.
+
+**Traps the worked example does not show.** The traps below are the price of the **re-layout** family —
+the rule above is what they cost, and they do not apply to a style that only contains. Four traps
+recurred, and each is **silent** — a crop, a misalignment or a doubled zoom, never an exception — so only
+the step-6 render check catches them.
 
 - **`S` is usually already taken — rename the incumbent, keep `S` for the factor.** Step 2's
   `S = Math.min(fx, fy)` collides with the score object or the scene-state object that many modules
@@ -272,9 +307,12 @@ Two defaults, on purpose:
 
 - **The publishing flow defaults to 9:16** (`DEFAULT_RATIO`, the first entry of `RATIOS`) and passes
   `--size WxH` down to the render tools explicitly.
-- **The low-level tools keep 1920×1080** (`takeSize` in `still.mjs` / `video.mjs`). All 43 demos'
-  `build.sh` call them without `--size` and compose at 1920×1080; moving the default down there would
-  crop every existing demo.
+- **The low-level tools keep 1920×1080** (`takeSize` in `still.mjs` / `video.mjs`). The **35** demos that
+  ship a `build.sh` (8 of the 43 styles ship none: `brick-toy`, `cel-anime-80s`, `game-show`,
+  `halftone-dossier`, `hd-2d`, `paper-popup`, `pictogram-motion`, `watercolor`) call them without `--size`
+  and compose at 1920×1080; moving the default down there would crop all 35. The count and the "no size
+  passed" claim are both machine-checkable: `ls styles/*/demo/build.sh | wc -l` → 35 and
+  `grep -l -- --size styles/*/demo/build.sh` → empty.
 
 `--size` beats `--ratio`; a custom size must be even and within `MIN_SIZE`–`MAX_SIZE` on both sides
 (96–8192 — the floor is the renderer's measured geometric minimum, not a round number; see

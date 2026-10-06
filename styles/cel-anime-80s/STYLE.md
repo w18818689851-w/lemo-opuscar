@@ -112,6 +112,29 @@ You decide the structure, the characters, the world, the opening, the ending, th
 - Openings: **in the middle of a conversation** (lip flaps already moving, no establishing shot); **a TV being switched on** to an in-world broadcast; **a close-up of a drawing hand** in a classroom, then cut to the world it draws.
 - Endings: **a freeze-frame** on a laugh with a "to be continued" card; **the tape runs out** into blue screen; **a slow pan up to a starry sky** from a quiet rooftop, no dialogue.
 
+### 11.1 Aspect cost
+
+All five ratios in `FILM_META.aspects` are honest — **nothing is cropped and nothing is stretched** — but
+they are earned by **containing**, not by re-laying-out. The film body (`main.js`, multi-layer cels +
+WebGL2 CRT) still draws one fixed 1920×1080 design frame; `demo/index.html` scales that whole frame
+uniformly into the current frame and centres it, and the remainder is filled with `#1f2446` (the style's
+night indigo). So a non-16:9 cut of this style is a **letterboxed** cut: the picture is complete, but it
+only fills part of the frame.
+
+| ratio | output | picture lands as | share of the frame |
+|---|---|---|---|
+| 16:9 | 1920×1080 | 1920×1080 | 100 % |
+| 9:16 | 1080×1920 | 1080×608 | 31.6 % |
+| 3:4 | 1440×1920 | 1440×810 | 42.2 % |
+| 4:3 | 1920×1440 | 1920×1080 | 75 % |
+| 1:1 | 1920×1920 | 1920×1080 | 56.25 % |
+
+If a delivery needs the picture to **fill** a non-16:9 frame, this style has to be re-laid-out instead of
+contained (positions × `fx`/`fy`, sizes × `S`; the rule and its silent traps are in
+[`MAINTAINING.md` → "Let a film support more than one aspect"](../../MAINTAINING.md)). Do **not** close the
+gap by scaling the design frame unevenly — that shears the picture. The bar colour is the style's own
+background on purpose, so a bar reads as part of the frame rather than as a bug.
+
 ---
 
 How our demo was made (story, shots, score, end card, build): [DEMO.md](DEMO.md). Read it after your treatment exists.

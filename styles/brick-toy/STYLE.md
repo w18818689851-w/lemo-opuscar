@@ -107,6 +107,29 @@ You decide the structure, the characters (or none), the surface and its props, t
 - Openings: **a hand pours a bin of bricks** onto the table and the pile settles into the first shape; **a real object first** (a mug, a phone), then rack focus to the tiny world at its base; **plan view** of an empty baseplate filling in like a map.
 - Endings: **one piece left over** held in close-up, the question it raises unanswered; **the lights go out** in the room and only a lit brick window glows; **a real hand** reaches in and picks the character up.
 
+### 11.1 Aspect cost
+
+All five ratios in `FILM_META.aspects` are honest — **nothing is cropped and nothing is stretched** — but
+they are earned by **containing**, not by re-laying-out. The film body (`main.js`, three.js — its
+`renderer.setSize(1920,1080)` deliberately does not follow the viewport) still draws one fixed 1920×1080
+design frame; `demo/index.html` scales that whole frame uniformly into the current frame and centres it,
+and the remainder is filled with `#f4f4f1` (the palette's `bg`). So a non-16:9 cut of this style is a
+**letterboxed** cut: the picture is complete, but it only fills part of the frame.
+
+| ratio | output | picture lands as | share of the frame |
+|---|---|---|---|
+| 16:9 | 1920×1080 | 1920×1080 | 100 % |
+| 9:16 | 1080×1920 | 1080×608 | 31.6 % |
+| 3:4 | 1440×1920 | 1440×810 | 42.2 % |
+| 4:3 | 1920×1440 | 1920×1080 | 75 % |
+| 1:1 | 1920×1920 | 1920×1080 | 56.25 % |
+
+If a delivery needs the picture to **fill** a non-16:9 frame, this style has to be re-laid-out instead of
+contained (positions × `fx`/`fy`, sizes × `S`; the rule and its silent traps are in
+[`MAINTAINING.md` → "Let a film support more than one aspect"](../../MAINTAINING.md)). Do **not** close the
+gap by scaling the design frame unevenly — that shears the picture. The bar colour is the style's own
+background on purpose, so a bar reads as part of the frame rather than as a bug.
+
 ---
 
 How our demo was made (story, shots, score, end card, build): [DEMO.md](DEMO.md). Read it after your treatment exists.

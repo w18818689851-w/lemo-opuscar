@@ -107,9 +107,10 @@ export const FILM_META = { id: 'coffee', title: 'Coffea arabica', style: 'Copper
 
 // 帧的构图闸门。makeFilm 从视口拿到 W/H（main.js 传的 opts.W/opts.H），而渲染侧（core/render）**不校验**
 // FILM_META.aspects —— 于是 `--size 2000x100` 之类可以绕过声明，悄悄出一部构图废掉的片子。
-// 这里**不拒绝**：still.mjs / video.mjs 是给人做实验的低层工具，全库 43 个风格的 demo/build.sh 都直接调它们，
-// 拒绝会让合法实验做不了。但**绝不静默**：打一条可读的 console.warn（页面警告由 core/render/page.mjs 的
-// openDemo(..., { warnings: true }) 带回终端）。清单直接读 FILM_META.aspects，声明改了警告跟着改，只有一份真相。
+// 这里**不拒绝**：still.mjs / video.mjs 是给人做实验的低层工具，全库 35 个 demo/build.sh（43 个风格里 8 个没带
+// build.sh）都直接调它们，拒绝会让合法实验做不了。但**绝不静默**：打一条可读的 console.warn（页面警告由
+// core/render/page.mjs 的 openDemo(..., { warnings: true }) 带回终端）。清单直接读 FILM_META.aspects，声明改了警告跟着改，只有一份真相。
+// 口径：ls styles/*/demo/build.sh | wc -l = 35；grep -l -- --size styles/*/demo/build.sh 为空（没有一个传尺寸）。
 const ASPECT_TOL = 0.02;   // 与 D:\lemo-tools\lib\aspects.mjs 的 ASPECT_TOL 同值，留给自定义尺寸的余量
 function frameWarning(W, H) {
   const r = W / H, list = FILM_META.aspects;

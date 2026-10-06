@@ -109,6 +109,28 @@ You decide the places, the figures (or none), the ladders, the light source, whe
 - Openings: **already lit, mid-scene** (a figure walking through a lit street; we learn it is paper only when the camera racks focus); **darkness and one hole** (a single pinprick of light widens into a moon, a door, an eye); **top-down** (hands' view of a sheet being cut; the cut sheet slides into the stack).
 - Endings: **the lights go out one by one**, the last window last; **rack focus to the front layer** until the story blurs into warm light; **a new sheet slides in** at the front, starting the next story.
 
+### 11.1 Aspect cost
+
+All five ratios in `FILM_META.aspects` are honest — **nothing is cropped and nothing is stretched** — but
+they are earned by **containing**, not by re-laying-out. The film body (`src/main.js`, three.js) still draws
+one fixed 1920×1080 design frame; `demo/index.html` scales that whole frame uniformly into the current frame
+and centres it, and the remainder is filled with `#0a1330` (the style's warm-night navy). So a non-16:9 cut
+of this style is a **letterboxed** cut: the picture is complete, but it only fills part of the frame.
+
+| ratio | output | picture lands as | share of the frame |
+|---|---|---|---|
+| 16:9 | 1920×1080 | 1920×1080 | 100 % |
+| 9:16 | 1080×1920 | 1080×608 | 31.6 % |
+| 3:4 | 1440×1920 | 1440×810 | 42.2 % |
+| 4:3 | 1920×1440 | 1920×1080 | 75 % |
+| 1:1 | 1920×1920 | 1920×1080 | 56.25 % |
+
+If a delivery needs the picture to **fill** a non-16:9 frame, this style has to be re-laid-out instead of
+contained (positions × `fx`/`fy`, sizes × `S`; the rule and its silent traps are in
+[`MAINTAINING.md` → "Let a film support more than one aspect"](../../MAINTAINING.md)). Do **not** close the
+gap by scaling the design frame unevenly — that shears the picture. The bar colour is the style's own
+background on purpose, so a bar reads as part of the frame rather than as a bug.
+
 ---
 
 How our demo was made (story, shots, score, end card, build): [DEMO.md](DEMO.md). Read it after your treatment exists.
