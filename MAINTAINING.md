@@ -325,7 +325,7 @@ by, and the films `styleboard/build.py:31-49` re-reads each `style.json`'s `dur`
 
 - **The orchestrator defaults to 9:16 — the *delivery* default, not the sample default.** `lemo-make.mjs`
   falls back to `DEFAULT_RATIO: '9:16'`, so a bare `node lemo-make.mjs <slug>` renders 1080×1920. **Re-rendering a
-  sample film must pass `--ratio 16:9` explicitly**; `scripts/style-distill.mjs:189` is the one place that does.
+  sample film must pass `--ratio 16:9` explicitly**; `scripts/style-distill.mjs:331` is the one place that does.
   *Why:* 9 styles declare no `FILM_META.aspects`, and this library reads **no declaration = 16:9 only** — a 9:16
   render yields a frame those styles never claimed to compose. *How to judge:* `ffprobe` the file you wrote; it
   must be **1920×1080**.
