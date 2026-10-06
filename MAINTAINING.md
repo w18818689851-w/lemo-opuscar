@@ -194,7 +194,7 @@ the step-6 render check catches them.
   already call `S`. Rename the **old** binding, because the factor is read at every draw site while the
   old name is read in a few. The rename must be **mechanical and complete** — every reference,
   destructuring pattern and `import { … }` list. In practice `styles/spy-titles/demo/paper.js:24`
-  renamed the paper/scene-state object `S` → `ST`, and `styles/living-screencast/demo/main.js:122`
+  renamed the paper/scene-state object `S` → `ST`, and `styles/living-screencast/demo/main.js:139`
   renamed `wipe()`'s parameter/local `W`/`S` → `WS`/`BS` and `hud()`'s `H` → `HU`. **Judge it by the
   diff:** 16:9 must be byte-for-byte what it was; a missed rename either throws `ReferenceError` or
   silently reads the wrong object.
@@ -214,7 +214,7 @@ the step-6 render check catches them.
   their positions take `FX`/`FY` and their sizes take `S`, so they cover the whole viewport
   (`styles/spy-titles/demo/frames.js:9`; `styles/living-screencast/demo/main.js:13`). Only genuinely
   **world-mapped** screen positions — a spotlight's centre, a toast anchored to an element, a cursor —
-  go through the world→current-frame conversion (`scr()` at `main.js:106`). Sending everything through
+  go through the world→current-frame conversion (`scr()` at `main.js:123`). Sending everything through
   `dXf()` looks right on 16:9 and fails on 9:16: in `living-screencast` the wipe then covered only the
   central band, because the uniform fit letterboxes.
 - **Three smaller ones, each seen once and cheap to repeat.** (i) **Integer rounding before scaling**
@@ -381,3 +381,17 @@ Don't push before the upload has finished, and don't commit `tools/assets.json` 
 ## Revise a style
 
 Back up first (old versions move out of the repository, not into git). Re-render, replace `<slug>.mp4`, and run `sh tools/publish.sh`: it re-uploads the film and refreshes its web cut.
+
+**A re-run can leave `<slug>.srt` modified — that is the expected shape, not damage.** The `subs` step rewrites the
+committed `<slug>.srt` from the durations the local TTS just produced, while `demo/voices/*` is gitignored
+(`.gitignore:13`, `:138`) — so the `.srt` is the only committed record of the subtitle windows, and the two **can**
+always drift. *Measured* on `art-deco` (a full 11-step `build.sh` re-run, every step rc=0): cue `L3` ends
+`00:00:23,292` in the repository vs `00:00:23,321` written (+29 ms), `L5` `00:00:52,327` vs `00:00:52,333` (+6 ms) —
+the committed file implies `dur_L3 = 3.771 s` / `dur_L5 = 3.153 s` against the local `3.7998 s` / `3.159 s`; every
+other cue is identical. **27** of the `build.sh` scripts write a `<slug>.srt` this way and **41** `.srt` files are
+committed, so this is not an art-deco quirk. *Why:* `<slug>.srt` is a published product kept in the library on
+purpose (`.gitignore:125-141`), while `voices/*.wav` / `voices/dur.json` are per-machine. *How to judge:*
+`git status --short` after a re-run — a lone `<slug>.srt` line is this, not a broken render. **Do not "fix" the
+`.srt` to chase the local voices, or the voices to chase the `.srt`**; restore the file
+(`git restore styles/<slug>/<slug>.srt`) or accept the diff. ★ `scripts/check-dual-copy-sync.mjs` classifies `*.srt`
+as a **generated** file, so this drift never turns the sync gate red.

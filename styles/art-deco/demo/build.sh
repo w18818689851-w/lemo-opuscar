@@ -11,7 +11,7 @@ $PY $D/music/score.py                                             # 5. 原创交
 $PY $D/tools/cuecheck.py                                          # 6. 配乐卡点 ↔ 画面时间网格自检
 $PY $D/mix.py                                                     # 7. 播音员五级空间 + 拟音 + 环境底 + 闪避 → mix.wav
 $PY $D/tools/subs.py && $PY core/render/srt.py $D/out/srt.json $O/art-deco.srt     # 8. 字幕
-node core/render/video.mjs $D --fps 24 --workers 2 --out $D/out/video24.mp4        # 9. 逐帧渲染（4 workers 约 15 s）
+node core/render/video.mjs $D --fps 24 --workers 2 --out $D/out/video24.mp4        # 9. 逐帧渲染（1401 帧；--workers 2 实测约 83 s，可调）
 sh core/render/mux.sh $D/out/video24.mp4 $D/mix.wav $O/art-deco.mp4 24 3           # 10. 合成：−14 LUFS，颗粒 3
 # 11. 静帧：风格帧 / 海报 / 关卡图
 node core/render/still.mjs $D 41.9 3.6 --q nosub=1 --out $D/out/still --prefix p_
