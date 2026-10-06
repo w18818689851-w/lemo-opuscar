@@ -3,6 +3,8 @@
 # 视频按目标帧率输出（定格片段自动复制帧）；grain = 颗粒强度（默认 2，0 = 不加；像素/矢量风格用 0）
 # 音频两遍 loudnorm → −14 LUFS / TP 起点 −1.7（单遍会偏 0.5 LU 左右）；★ 编码后**复核成片**：真峰值 ≤ −1.2 dBTP 且响度 −14±1 LU 才算达标，
 #   不达标就把 TP 目标按 LEMO_LN_TP_STEP 逐档下调重编（最多 LEMO_LN_TP_TRIES 档，重编只重做音频、视频流 -c:v copy 复用），最后打印实测的 I / LRA / 真峰值。
+#   ★ 复核**量不出来**（measure_film 的 ffmpeg 失败 / 读数没解析出来）**不是「不达标」**：不降档重编（没有读数可依），
+#     只打一次明确警告、照旧交付第 1 档成片 —— 交付的文件 / stdout / 退出码与「原来白跑满 8 档」时**完全相同**，只是不再白编 7 次。
 # ⚠️ loudnorm 的 TP 目标（起点 −1.7）比交付目标（−1.2）低 0.5 dB —— 那是留给 AAC 编码的余量，见下面 LN_TP 的说明。别把两者当成不一致。
 # ⚠️ 告警阈值必须与目标一致，而且**必须用够精度的读数**：目标是 TP ≤ −1.2，原来告警却用 p > −1（差 0.2 dB）。
 #    但只把 −1 改成 −1.2 也没用 —— ebur128 的 Peak 只印 1 位小数，真峰值 −1.17 dBTP 会印成 "-1.2"，
@@ -208,9 +210,25 @@ mux_once() {
   fi
 }
 # 量成片：真峰值取 loudnorm 的 4× 过采样 input_tp（交付口径），响度取同一次解码的 input_i。回显 "I TP"。
+# ★ -vn（2026-10-06 性能审计）：这条只跑音频滤镜链（-af loudnorm）、输出到 -f null，**不读视频**。
+#   不加 -vn 时 ffmpeg 会按默认映射把 h264 视频流也解码一遍（实测 `Stream #0:0 -> #0:0 h264 -> wrapped_avframe`），
+#   白花 2.3 s/次（148 s 1080p 成片实测 7003 ms → 4720 ms），而读数逐位不变（input_i/-tp/-lra/thresh/offset 全同）。
+#   闭环会调它 1~8 次，省下的时间按次数翻倍。★ 这里没有 -map 0:v，加 -vn 不冲突。
+# ★★ 判据（2026-10-06 修，勿回退）：本函数**必须能区分「量出来了」与「没量出来」** ——
+#   量出来了才回显 "I TP"；**没量出来就 `return 1` 且不回显读数**。判据两条，任一成立即「没量出来」：
+#   ① ffmpeg 退出码 ≠ 0；② input_i / input_tp 有一个没解析出来（空串）。
+#   ⚠️ 退出码必须**这样**取：`_all=$(ffmpeg … 2>&1)` 让 ffmpeg **独占**命令替换（于是 $? 就是它自己的），
+#     再对变量做 sed。原来写成 `_j=$(ffmpeg … 2>&1 | sed -n '/{/,/}/p')` —— 管道末段是 sed，
+#     **ffmpeg 的退出码被吃掉**（恒为 0），失败时只是解析出两个空串，看起来与「读数解析不出」无从区分，
+#     闭环便把它当成「不达标」⇒ **白跑满 8 档全片音频重编**（每档一次），最后交付的还是第 1 档。
+#     实测（2026-10-06，30 s 成片，用一个只在这次调用上 exit 1 的 ffmpeg 桩注入）：8 档 / 23.6 s。
+#   ⚠️ 别把「读数是 -inf/nan」也当失败：那是**量出来了**的合法结果（静音片），此时 NORM=0、本函数只被调 1 次。
 measure_film() {
-  _j=$(ffmpeg -hide_banner -nostats -i "$1" -af loudnorm=I=-14:TP=-1.7:LRA=11:print_format=json -f null - 2>&1 | sed -n '/{/,/}/p')
-  echo "$(jget "$_j" input_i) $(jget "$_j" input_tp)"
+  _all=$(ffmpeg -hide_banner -nostats -vn -i "$1" -af loudnorm=I=-14:TP=-1.7:LRA=11:print_format=json -f null - 2>&1); _mrc=$?
+  _j=$(echo "$_all" | sed -n '/{/,/}/p')
+  _mi=$(jget "$_j" input_i); _mp=$(jget "$_j" input_tp)
+  [ "$_mrc" = 0 ] && [ -n "$_mi" ] && [ -n "$_mp" ] || return 1
+  echo "$_mi $_mp"
 }
 # 临时文件名：把后缀插在扩展名之前（**必须保留扩展名**，否则 ffmpeg 认不出封装器）。
 tmp_out() {
@@ -224,7 +242,7 @@ tmp_out() {
   esac
 }
 VIDOUT=$(tmp_out "$O" tryvid)
-TP_TRY="$LN_TP"; ATTEMPT=0; BEST_R=""; BEST_S=""; BEST_TP=""; BEST_I=""; BEST_P=""; BEST_OUT=""; TRIES=""; TEMPS=""
+TP_TRY="$LN_TP"; ATTEMPT=0; MFAIL=0; BEST_R=""; BEST_S=""; BEST_TP=""; BEST_I=""; BEST_P=""; BEST_OUT=""; TRIES=""; TEMPS=""
 while [ "$ATTEMPT" -lt "$LN_TP_TRIES" ]; do
   ATTEMPT=$((ATTEMPT + 1))
   if [ "$ATTEMPT" = 1 ]; then OUT="$O"; else OUT=$(tmp_out "$O" "try$ATTEMPT"); TEMPS="$TEMPS $OUT"; fi
@@ -244,7 +262,17 @@ while [ "$ATTEMPT" -lt "$LN_TP_TRIES" ]; do
     mux_once "$TP_TRY" "$OUT" 1 || { rm -f $TEMPS "$VIDOUT"; die "ffmpeg failed while re-muxing '$OUT' (its message is above)"; }
   fi
   [ -s "$OUT" ] || { rm -f $TEMPS "$VIDOUT"; die "no output was written to '$OUT'"; }
-  _M=$(measure_film "$OUT"); OI="${_M%% *}"; OP="${_M##* }"
+  # ★ 量不出来（measure_film 的 ffmpeg 失败 / 读数没解析出来）**不等于「不达标」**：读数无效时再降 TP 重编毫无依据
+  #   （原来正是这里把空读数当「不达标」⇒ 白跑满 8 档、每档一次全片音频编码，交付的却仍是第 1 档）。
+  #   所以这里**明确警告一次并停止重试**，然后照旧收尾：第 1 档成片就写在 $O、下面 BEST 记的也是它
+  #   ⇒ 最终交付的文件、stdout、退出码都与「原来跑满 8 档」时**逐位相同**，只是不再付那 7 次白编的代价。
+  #   ⚠️ 不改「达标」与「真不达标（读数有效）」两条路径的任何行为，也不新增 die 路径（原来会 die 的仍 die）。
+  if _M=$(measure_film "$OUT"); then
+    OI="${_M%% *}"; OP="${_M##* }"; MFAIL=0
+  else
+    OI=""; OP=""; MFAIL=1
+    echo "mux.sh: warning: could NOT measure the film '$OUT' (ffmpeg failed while re-reading it with loudnorm, or its readout did not parse): the loudness / true-peak check was SKIPPED and this film is UNVERIFIED. Not lowering the TP target: a retry would have no valid reading to steer by. Stopping after this attempt." >&2
+  fi
   TP_OK=0; I_OK=0
   awk -v p="$OP" 'BEGIN { exit !(p + 0 <= -1.2) }' && TP_OK=1
   awk -v i="$OI" 'BEGIN { d = i + 0 + 14; if (d < 0) d = -d; exit !(d <= 1.0) }' && I_OK=1
@@ -257,7 +285,9 @@ while [ "$ATTEMPT" -lt "$LN_TP_TRIES" ]; do
   if [ -z "$BEST_R" ] || awk -v r1="$_R" -v s1="$_S" -v r0="$BEST_R" -v s0="$BEST_S" 'BEGIN { exit !(r1 < r0 || (r1 == r0 && s1 < s0)) }'; then
     BEST_R="$_R"; BEST_S="$_S"; BEST_TP="$TP_TRY"; BEST_I="$OI"; BEST_P="$OP"; BEST_OUT="$OUT"
   fi
-  # 真峰值一旦达标就收手：响度只会随 TP 下行更差（实测单调），再降没有意义
+  # 量不出来 ⇒ 立刻收手：重编没有任何读数可依（原来会白跑满 8 档）。
+  # 否则真峰值一旦达标就收手：响度只会随 TP 下行更差（实测单调），再降没有意义。
+  [ "$MFAIL" = 1 ] && break
   [ "$TP_OK" = 1 ] && break
   TP_TRY=$(awk -v t="$TP_TRY" -v s="$LN_TP_STEP" 'BEGIN { printf "%.3f", t - s }')
 done
@@ -265,7 +295,10 @@ done
 rm -f $TEMPS "$VIDOUT"
 echo "$O"
 # ebur128 出人看的 I / LRA / Peak；astats 串在同一条 -af 链里（同一次解码，不额外花钱）提供 6 位小数的峰值。
-R=$(ffmpeg -hide_banner -nostats -i "$O" -af ebur128=peak=true,astats=measure_perchannel=none -f null - 2>&1 | grep -E "^\s+(I|LRA|Peak):|Peak level dB" | head -6)
+# ★ -vn（2026-10-06 性能审计）：同上，纯音频滤镜链 + -f null，不需要视频；
+#   不加时白解码一遍 h264（148 s 1080p 实测 3641 ms → 1561 ms），I/LRA/Peak/astats 读数逐位不变。
+#   ★ 上面 :235 那句抽视频流的 `-map 0:v -c:v copy -an` 和 mux_once 的两条编码命令**绝不能**加 -vn。
+R=$(ffmpeg -hide_banner -nostats -vn -i "$O" -af ebur128=peak=true,astats=measure_perchannel=none -f null - 2>&1 | grep -E "^\s+(I|LRA|Peak):|Peak level dB" | head -6)
 echo "$R"
 if [ "$NORM" = 1 ]; then
   OI=$(echo "$R" | awk '$1 == "I:" { print $2 }')
@@ -285,7 +318,9 @@ if [ "$NORM" = 1 ]; then
   [ -n "$OPT" ] || OPT="$OPX"
   if awk -v i="$OI" -v p="$OPX" -v t="$OPT" 'BEGIN { exit !(i + 0 < -15 || i + 0 > -13 || p + 0 > -1.2 || t + 0 > -1.2) }'; then
     echo "mux.sh: warning: the film missed the target (-14 LUFS, true peak <= -1.2 dB): measured $OI LUFS, true peak $OPT dBTP (sample peak $OPX dB; ebur128 1-decimal readout $OP dB). The mix is probably clipping or has very hot peaks: lower it and tame the peaks, then mux again" >&2
-    [ "$BEST_R" = 0 ] || echo "mux.sh: warning: the two delivery lines cannot BOTH be met for this film: the true peak only comes under -1.2 dBTP at TP target $BEST_TP, but there the loudness is $BEST_I LUFS (outside -14 +/- 1 LU). Kept the best of $ATTEMPT tries; tried (loudness,true peak) per TP target: $TRIES" >&2
+    # ★ 量不出来（MFAIL=1）时**不要**打这句：它是在断言「试过的每一档的实测值」，可那一轮根本没读到任何读数
+    #   （实测会印出 `-1.7:(,) -1.950:(,) …` 这种空壳，误导读者以为试过 8 档）。上面「量不出来」那一支已单独警告过。
+    [ "$MFAIL" = 1 ] || [ "$BEST_R" = 0 ] || echo "mux.sh: warning: the two delivery lines cannot BOTH be met for this film: the true peak only comes under -1.2 dBTP at TP target $BEST_TP, but there the loudness is $BEST_I LUFS (outside -14 +/- 1 LU). Kept the best of $ATTEMPT tries; tried (loudness,true peak) per TP target: $TRIES" >&2
   fi
 fi
 exit 0
