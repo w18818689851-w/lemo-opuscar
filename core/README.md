@@ -115,6 +115,25 @@ All four page tools take `--size WxH` (default `1920x1080`, even numbers) and `-
 | `INDEXTTS_LOCK_TIMEOUT` | how long to wait for the lock (s; default 7200) |
 | `INDEXTTS_LOCK_STALE` | a lock older than this (s) counts as stale (default 21600) |
 
+### `tools/` environment variables
+
+★ The table above is **`core/` scope**. The scripts under `tools/` (the repo-wide font fetchers, plus the web-cut encoder) read a few variables of their own, and **no `core/` file reads any of them** — they are listed here so the same "**table ↔ code**" check (`scripts/check-env-overrides.mjs`, judgement ⑤) covers `tools/` too. The default is what the code falls back to when the variable is unset.
+
+| Variable | Meaning |
+|---|---|
+| `LEMO_LIB` | the repo root, for `tools/fonts/fetch-extra-fonts.sh` (default `$PWD`; the caller `tools/fetch-fonts.sh:379` passes its own `$LIB` in). Read by `tools/fonts/fetch-extra-fonts.sh:11` |
+| `FONT_CACHE` | raw source-file cache, keyed by repo path (default `/opt/fontsrc-cache`). Read by `tools/fetch-fonts.sh:34`, `tools/fonts/fetch-extra-fonts.sh:12`, `tools/fonts/fetch-subset-fonts.py:22` |
+| `FONT_STAGE` | produced-artifact cache, keyed by `name\|op\|src` (default `/opt/fontstage`). Read by `tools/fetch-fonts.sh:35` |
+| `FONT_STAGE_EXTRA` | produced-artifact cache for stage 5 — the demos that reference `fonts/` straight from `index.html` (default `/opt/fontstage-extra`). Read by `tools/fonts/fetch-extra-fonts.sh:13` |
+| `FONT_PY` | the python that has fontTools + brotli, used to convert / slice fonts (default `/opt/fonttools-venv/bin/python`). Read by `tools/fetch-fonts.sh:36` |
+| `FONT_REPORT` | where the run's per-font statistics go (default `/tmp/font_report.txt`). Read by `tools/fetch-fonts.sh:37` |
+| `FONT_FAILED` | the failed / missing list (default `/tmp/font_failed.txt`). Read by `tools/fetch-fonts.sh:38` |
+| `FONT_OKLOG` | the fonts that were written or were already present (default `/tmp/font_ok.txt`). Read by `tools/fetch-fonts.sh:39` |
+| `FONT_SUB_TMP` | the intermediate directory for the subset-cropping stage (default `/opt/fontsub-tmp`). Read by `tools/fonts/fetch-subset-fonts.py:23` |
+| `ONLY_SLUGS` | space-separated slug allow-list for stage 5 (default empty = every slug). Read by `tools/fonts/fetch-extra-fonts.sh:14,19` |
+
+`LEMO_VENC` (above) is the one variable **both** scopes read — `core/render/*` and `tools/web_cuts.sh:9,12`.
+
 ## Exit codes
 
 | Tool | 0 | 1 | 2 |
