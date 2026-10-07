@@ -142,7 +142,7 @@ for f in Dreamy_Flashback Jaunty_Gumption Heartwarming; do ffmpeg -y -i $D/music
 $PY $D/tts/gen.py af_bella            # → voices/v01..v15.wav + voices/dur.json
 $PY $D/tts/gen1.py v04 v07            # regenerate selected lines
 # 2. proof-listen
-$PY $D/asr.py; $PY $D/words.py        # whisper transcript / word timestamps for gag sync
+$PY $D/asr.py; $PY $D/words.py        # whisper transcript / word timestamps for gag sync — 原记与实测不符（2026-10-07 核实）：words.py 只 print 到 stdout、不写任何文件（5 个硬编码 id、base.en），voices/ 下确无 words.json ⇒ 其实是一次性调试草稿（人工看口型节奏），不是产出文件的步骤；asr.py 亦只逐行打印转写、不落盘。
 # 3. timeline: edit story.js (VO start times use voices/dur.json), then check stills
 node $D/render.mjs stills 6.5 30 61.8 82.6 118     # → demo/stills/t_*.jpg (STILLS_DIR=out/x to redirect)
 # 4. score (only when the edit points change)
