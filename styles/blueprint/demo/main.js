@@ -88,7 +88,7 @@ function frame3() {  // 修订云线变成雨云
 }
 function styleframe() { frame1(); }
 const lines = await (await fetch('lines.json')).json();
-let durs = {}; try { const r = await fetch('voices/dur.json'); if (r.ok) durs = await r.json(); } catch (e) { }   // voices/ 是生成物（.gitignore:124），未构建时留空表
+let durs = {}; try { const r = await fetch('voices/dur.json'); if (r.ok) durs = await r.json(); } catch (e) { }   // voices/ 是生成物（.gitignore:138），未构建时留空表
 setLines(lines, durs);
 window.render = t => {
   const fr = Q.get('frame');

@@ -10,7 +10,7 @@ const ss = x => { x = clamp(x); return x * x * (3 - 2 * x); };
 
 export async function overlayReady() {
   await Promise.all(['500 40px Cinzel', '700 40px Cinzel', 'italic 500 40px "Cormorant Garamond"', '600 40px "Cormorant Garamond"', '500 40px "Cormorant Garamond"'].map(f => document.fonts.load(f)));
-  try { const r = await fetch('voices/dur.json'); if (r.ok) DURS = await r.json(); } catch (e) { }   // voices/ 是生成物（.gitignore:124），未构建时留空表，用下面的默认时长
+  try { const r = await fetch('voices/dur.json'); if (r.ok) DURS = await r.json(); } catch (e) { }   // voices/ 是生成物（.gitignore:138），未构建时留空表，用下面的默认时长
 }
 export const CREDIT = { music: 'Music: “Precipice” by Scott Buckley — scottbuckley.com.au (CC BY 4.0)   ·   Voices: Kokoro TTS' };
 // 片尾署名（2026-09-26 已加进成片）：默认开启；?nocredit=1 可关掉（复现旧版 hd-2d_v1.mp4 的片尾）

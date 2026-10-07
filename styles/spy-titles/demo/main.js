@@ -16,7 +16,7 @@ setFrame(VW, VH);
 await Promise.all(['400 40px LGothic', '400 40px LSpartan', '600 40px LSpartan', '700 40px LSpartan', '800 40px LSpartan'].map(f => document.fonts.load(f)));
 await loadFonts();
 const lines = await (await fetch('lines.json')).json();
-let dur = {}; try { const r = await fetch('voices/dur.json'); if (r.ok) dur = await r.json(); } catch (e) { }   // voices/ 是生成物（.gitignore:124），未构建时留空表（film.js 用 `DURS[L.id] || 2`）
+let dur = {}; try { const r = await fetch('voices/dur.json'); if (r.ok) dur = await r.json(); } catch (e) { }   // voices/ 是生成物（.gitignore:138），未构建时留空表（film.js 用 `DURS[L.id] || 2`）
 setLines(lines, dur);
 window.DUR = DUR; window.EV = events(); window.SUBS = subs();
 window.render = t => {

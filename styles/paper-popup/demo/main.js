@@ -30,7 +30,7 @@ const post = makePost(renderer, scene, cam, W, H);
 // ---------- 资源 ----------
 const fontList = ['500 40px Fredoka', '600 40px Fredoka', '700 40px Fredoka', '40px "Lilita One"', '40px "IM Fell English"', 'italic 40px "IM Fell English"', '40px "ZCOOL KuaiLe"'];
 await Promise.all(fontList.map(f => document.fonts.load(f, 'Aa小精灵')));
-let DURS = {}; try { const r = await fetch('voices/dur.json'); if (r.ok) DURS = await r.json(); } catch (e) { }   // voices/ 是生成物（.gitignore:124），未构建时留空表（hud.js 用 `dur[id] || 3`）
+let DURS = {}; try { const r = await fetch('voices/dur.json'); if (r.ok) DURS = await r.json(); } catch (e) { }   // voices/ 是生成物（.gitignore:138），未构建时留空表（hud.js 用 `dur[id] || 3`）
 const hdr = await new RGBELoader().loadAsync('assets/lythwood_lounge_2k.hdr'); hdr.mapping = THREE.EquirectangularReflectionMapping;
 scene.environment = hdr; scene.background = hdr; scene.backgroundBlurriness = .22;
 const ENV_YAW = parseFloat(new URLSearchParams(location.search).get('yaw') || '2.3');

@@ -7,7 +7,7 @@ await Promise.all(['80px Titan', '40px Lilita', '40px VT', '40px Arch', '40px Go
 const mods = {};
 const film = await import('./film.js');
 const lines = await (await fetch('lines.json')).json();
-let durs = {}; try { const r = await fetch('voices/dur.json'); if (r.ok) durs = await r.json(); } catch (e) { }   // voices/ 是生成物（.gitignore:124），未构建时留空表（film.js 用 `DURS[l.id] || 1`）
+let durs = {}; try { const r = await fetch('voices/dur.json'); if (r.ok) durs = await r.json(); } catch (e) { }   // voices/ 是生成物（.gitignore:138），未构建时留空表（film.js 用 `DURS[l.id] || 1`）
 film.setLines(lines, durs);
 window.EV = film.events(); window.SUBS = film.subs(); window.SRT = film.srtCues();
 window.render = async t => {

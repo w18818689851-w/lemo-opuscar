@@ -11,7 +11,7 @@ const NOSUB = q.has('nosub');
 const fb = new FB(), out = makeOut(document.getElementById('c'));
 const TL = await (await fetch('./timeline.json')).json();
 const LINES = await (await fetch('./lines.json')).json();
-let VDUR = {}; try { const r = await fetch('./voices/dur.json'); if (r.ok) VDUR = await r.json(); } catch (e) { }   // voices/ 是生成物（.gitignore:124），未构建时留空表
+let VDUR = {}; try { const r = await fetch('./voices/dur.json'); if (r.ok) VDUR = await r.json(); } catch (e) { }   // voices/ 是生成物（.gitignore:138），未构建时留空表
 const LINE = Object.fromEntries(LINES.map(l => [l.id, l]));
 const vo = id => ({ t0: TL.vo[id].t, t1: TL.vo[id].t + (VDUR[id] || 2), expr: TL.vo[id].expr, text: LINE[id].sub || LINE[id].text });
 

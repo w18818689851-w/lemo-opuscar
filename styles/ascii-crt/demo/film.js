@@ -22,7 +22,7 @@ let g = G0;
 await initTerm();
 const Q = new URLSearchParams(location.search);
 const lines = await (await fetch('lines.json')).json();
-let words = {}; try { const r = await fetch('voices/words.json'); if (r.ok) words = await r.json(); } catch (e) { }   // voices/ 是生成物（.gitignore:124），未构建时留空表
+let words = {}; try { const r = await fetch('voices/words.json'); if (r.ok) words = await r.json(); } catch (e) { }   // voices/ 是生成物（.gitignore:138），未构建时留空表
 let vdur = {}; try { const r = await fetch('voices/dur.json'); if (r.ok) vdur = await r.json(); } catch (e) { }
 
 const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));

@@ -134,7 +134,7 @@ export function renderFilm(g, t, Q) {
 let LINES = [], DURS = {};
 export async function init() {
   LINES = await (await fetch('lines.json')).json();
-  try { const r = await fetch('voices/dur.json'); if (r.ok) DURS = await r.json(); } catch (e) { }   // voices/ 是生成物（.gitignore:124），未构建时留空表，用下面的默认时长
+  try { const r = await fetch('voices/dur.json'); if (r.ok) DURS = await r.json(); } catch (e) { }   // voices/ 是生成物（.gitignore:138），未构建时留空表，用下面的默认时长
 }
 export function subs() {
   return TL.LINES.map(l => {

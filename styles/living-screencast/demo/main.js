@@ -22,7 +22,7 @@ if (FIT) {
   hudEl.style.setProperty('--s', S); hudEl.style.setProperty('--fx', FX); hudEl.style.setProperty('--fy', FY);
 }
 
-// voices/words.json、voices/dur.json 是**生成物**（.gitignore:124，未构建时不在检出里）。
+// voices/words.json、voices/dur.json 是**生成物**（.gitignore:138，未构建时不在检出里）。
 // 真表是 whisper 在配音上打的逐词时间戳（相对本句 VO 起点）：[word, start, end]。
 // 缺失时**合成**一张同形的表：把本句 (asr || text) 的词在 [本句 VO, 下一句 VO) 内均分。
 // 这样 W()/WE() 仍能按词命中，影片骨架（打字、光标、字幕）照样成立 —— 只是节奏变成均匀的近似。

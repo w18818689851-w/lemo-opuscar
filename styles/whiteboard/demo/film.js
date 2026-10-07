@@ -19,7 +19,7 @@ export const VO = {
 };
 export const END = 111;
 
-// voices/words.json 是**生成物**（.gitignore:124，未构建时不在检出里）。真表是 whisper 在配音上打的逐词
+// voices/words.json 是**生成物**（.gitignore:138，未构建时不在检出里）。真表是 whisper 在配音上打的逐词
 // 时间戳（相对本句 VO 起点）：[word, start, end]。缺失时合成一张同形的表：把本句 (asr || text) 的词在
 // [本句 VO, 下一句 VO) 内均分 ⇒ at()/atS()/atE() 仍能按词命中，笔画节奏变成均匀的近似（不是空表）。
 async function voicesWords(lines) {
