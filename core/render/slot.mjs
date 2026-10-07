@@ -108,7 +108,13 @@ export async function acquire({ slots, minFree } = {}) {
           withMutex(() => {
             if (readPid(d) === process.pid) { const t = `${d}.rel-${process.pid}-${Date.now()}`; try { fs.renameSync(d, t); rmrf(t); } catch { rmrf(d); } }   // 只删自己的（被接管后不动别人的）
           });
-        } catch { /* 静默：release 只做尽力而为，绝不能把退出/收尾路径搞崩 */ }
+        } catch (e) {
+          // 判据：ENOENT = **预期内**（DIR 被外部删掉了，槽位反正会过期、被 STALE_AFTER 接管）⇒ 静默；
+          //       其它（EACCES/EPERM/…，如锁目录不可写）= **意外** ⇒ 喊一次，别静默失败。
+          // ★ release 会被 process.on('exit', release) 在退出处理器里调用，那个上下文里 stderr **可能来不及 flush**
+          //   ⇒ 这条警告只是**尽力而为的痕迹**，不是「一定能看到」的保证。
+          if (e && e.code !== 'ENOENT') warnOnce('release 失败（槽位可能残留，会被 STALE_AFTER 接管）: ' + (e.code || e.message));
+        }
       };
       process.on('exit', release);
       return release;
