@@ -95,14 +95,20 @@ export async function acquire({ slots, minFree } = {}) {
       let done = false;
       const release = () => {
         if (done) return; done = true; clearInterval(timer);
-        process.off('exit', release);   // ④ 幂等解绑：否则同进程每 acquire() 一次就多挂一个 'exit' 监听器、从不移除（第 11 个起 MaxListenersExceededWarning，且 release 会被反复触发）
+        // ④ 幂等解绑：否则同进程每 acquire() 一次就多挂一个 'exit' 监听器、从不移除（第 11 个起 MaxListenersExceededWarning，且 release 会被反复触发）。
+        //    放在 try **外面**：解绑本身不会抛，而且它必须在任何情况下都执行到（若被下面的 catch 吞掉，④ 的监听器累积会复发）。
+        process.off('exit', release);
         // ② 「判断 + rename + rmrf」必须和 tryTake 的「看状态 → 接管/占槽」用**同一把**互斥锁：
         //    否则 release 判完 pid、还没 rename 的空档里，别的进程可能刚好接管了这个槽位（rename 旧的、mkdir 新的、写自己的 pid），
         //    release 的 renameSync 照样成功 ⇒ 把**新持有者**的槽位 rename 走并删掉，新持有者以为自己有槽、其实槽没了。
-        //    DIR 必然存在：我们正持有 DIR 里的槽位目录 d（release 只在拿到槽之后才会被调用），所以 withMutex 往 DIR 里建 .mutex 不会 ENOENT。
-        withMutex(() => {
-          if (readPid(d) === process.pid) { const t = `${d}.rel-${process.pid}-${Date.now()}`; try { fs.renameSync(d, t); rmrf(t); } catch { rmrf(d); } }   // 只删自己的（被接管后不动别人的）
-        });
+        //    ★ 订正：DIR 并非必然存在 —— 外部（系统清 tmp / 测试收尾 / 用户手删 RENDER_SLOT_DIR）可能把整个 DIR 删掉，
+        //      这时 withMutex 里 fs.mkdirSync(DIR/.mutex) 会 ENOENT。而 release 是**尽力而为**的收尾路径
+        //      （会被 process.on('exit', release) 在退出处理器里调用），在那里抛异常是最坏的形态 ⇒ 整段吞掉。
+        try {
+          withMutex(() => {
+            if (readPid(d) === process.pid) { const t = `${d}.rel-${process.pid}-${Date.now()}`; try { fs.renameSync(d, t); rmrf(t); } catch { rmrf(d); } }   // 只删自己的（被接管后不动别人的）
+          });
+        } catch { /* 静默：release 只做尽力而为，绝不能把退出/收尾路径搞崩 */ }
       };
       process.on('exit', release);
       return release;
