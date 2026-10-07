@@ -39,7 +39,7 @@ STILL_NAME = re.compile(r'(?<![\w/.*-])([A-Za-z0-9_][A-Za-z0-9_.*-]*\.(?:jpe?g|p
 # ★ 2026-10-06 LOCAL_PATH 先剥「散文」再匹配（下面 prose_free）。由来（实测的 5 处假红）：判据原来直接对
 #   整份字节匹配，而**注释/docstring 里的示例路径也是文本** ⇒ 一句话「**不写死** /home/lemo/... 之类的主机
 #   绝对路径」（`tools/fetch-fonts.sh:29`）被当成写死了路径；`core/tts/voice_ref.py:9` 与
-#   `styles/paper-lantern/demo/tts_local.py:26` 是 docstring 里的 wsl 用法示例；`core/tts/tts_indextts.py:944`、
+#   `styles/paper-lantern/demo/tts_local.py:26` 是 docstring 里的 wsl 用法示例；`core/tts/tts_indextts.py:972`、
 #   `styles/game-show/demo/make_voices_kokoro.py:31` 是 `#` 注释。**与 check-esm-import-paths 同一类缺陷**：
 #   匹配对象是代码时，注释绝不算数。
 #   ★ 但**字符串字面量必须保留**：`PATH = '/home/lemo/x'` 正是本判据要抓的（判据不能因为「它在引号里」
