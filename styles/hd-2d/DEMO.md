@@ -2,7 +2,7 @@
 
 One example among many. Don't reuse its story, arc, shots, props or timings.
 
-Demo: *The Lampbearer* (76.5 s, 1920×1080, 60 fps) · `hd-2d.mp4` (the **tilt-shift cut**) · source in [`demo/`](demo/) (local only) · engine: three.js r170 scenes + procedural pixel textures + custom physical DOF / tilt-shift post (`demo/post_ts.js`) + Canvas2D overlay UI, rendered frame-by-frame with `core/render/video.mjs`.
+Demo: *The Lampbearer* (76.5 s, 1920×1080, 24 fps（★ 2026-10-07 复核订正：原记 60 fps；随库成片实测 24 fps）) · `hd-2d.mp4` (the **tilt-shift cut**) · source in [`demo/`](demo/) (local only) · engine: three.js r170 scenes + procedural pixel textures + custom physical DOF / tilt-shift post (`demo/post_ts.js`) + Canvas2D overlay UI, rendered frame-by-frame with `core/render/video.mjs`.
 
 
 ## Story & structure

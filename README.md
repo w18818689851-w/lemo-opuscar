@@ -90,7 +90,7 @@ The agent reads three guides and works like a small studio:
 
 - A film takes an agent about 30–60 minutes and a fair amount of tokens.
 - You need Node 20+, ffmpeg and Python 3.11+ (or [uv](https://docs.astral.sh/uv/)); the agent installs the rest.
-- Default output 1920×1080, 24 fps; other sizes on request.
+- Default output 1080×1920 (9:16), 24 fps; other sizes on request (the low-level render tools default to 1920×1080).
 
 Update: `claude plugin marketplace update lemolab && claude plugin update lemo-opuscar@lemolab`, then restart Claude Code (the library in `~/lemo-opuscar` updates itself on the next film); uninstall with `claude plugin uninstall lemo-opuscar@lemolab` and delete `~/lemo-opuscar`. If a step stays stuck, [open an issue](https://github.com/lemomo-ai/lemo-opuscar/issues).
 

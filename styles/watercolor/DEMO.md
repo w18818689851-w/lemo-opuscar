@@ -2,7 +2,7 @@
 
 One example among many. Don't reuse its story, arc, shots, props or timings.
 
-Demo: *Follow the Rain* (113.6 s, 1920×1080, 60 fps) · `watercolor.mp4` · source in [`demo/`](demo/) · engine: Canvas2D stroke engine (`engine.js` `mk`/`drawS`, variable-width ribbon + dashed bristle tracks), procedural plant generators, per-plant sprite cache, headless Chrome frame capture.
+Demo: *Follow the Rain* (113.6 s, 1920×1080, 24 fps（★ 2026-10-07 复核订正：原记 60 fps；随库成片实测 24 fps）) · `watercolor.mp4` · source in [`demo/`](demo/) · engine: Canvas2D stroke engine (`engine.js` `mk`/`drawS`, variable-width ribbon + dashed bristle tracks), procedural plant generators, per-plant sprite cache, headless Chrome frame capture.
 
 
 The demo is a naturalist's field journal: one long sideways walk through the Australian landscape along a rainfall gradient, hand-written notes and a quiet rainfall gauge, then a pull-out to a painted map that moves through deep time.

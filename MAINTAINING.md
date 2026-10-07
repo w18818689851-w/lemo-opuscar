@@ -18,7 +18,7 @@ Work in `styles/<slug>/` (lowercase letters, digits, hyphens; unique). Start fro
 Assets are CC0, CC BY or OFL only, each in `demo/CREDITS`. No watermark on any film. Real people, brands and events appear only in an unofficial fan film; its `DEMO.md` says so.
 
 **A fresh clone has no fonts — fetch them before rendering a demo.** `styles/*/demo/fonts/**` is
-gitignored (`.gitignore:63-64`, `:77-78`), so a new clone arrives with **0 of the 954** font files across
+gitignored (`.gitignore:66-67`, `:80-81`), so a new clone arrives with **0 of the 954** font files across
 **all 41** demos that ship a `demo/fonts/`. Each `fonts.css` then points at files that are not there — the
 tool prints `optional file missing: <URL>` and carries on, so every face falls back to a system font.
 

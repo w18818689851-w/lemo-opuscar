@@ -77,11 +77,29 @@ All four page tools take `--size WxH` (default `1920x1080`, even numbers) and `-
 | `LEMO_OPUSCAR_HOME` | where `setup.sh` keeps the library (default `~/lemo-opuscar`) |
 | `PLAYWRIGHT_CHROME` | a Chrome / headless-shell executable instead of Playwright's |
 | `LEMO_ANGLE` | WebGL backend (default `metal` on macOS; `default` passes none) |
-| `RENDER_SLOTS` | optional; limits concurrent full renders across processes |
+| `LEMO_GPU` | headless-Chrome GPU switch: `1` force on, `0` force off, unset = auto (on for Windows; on Linux only when `LEMO_ANGLE` is a real backend). Read by `core/render/browser.mjs` |
+| `RENDER_SLOTS` | optional; limits concurrent full renders across processes (default 3). Read by `core/render/slot.mjs` |
+| `RENDER_MIN_FREE` | free-memory percent (default 30) below which a second full render queues while one is already running. Read by `core/render/slot.mjs` |
+| `RENDER_SLOT_DIR` | the slot lock directory (default `<tmp>/lemo-opuscar-render-slots-<uid>`, shared by every clone, works on a read-only checkout). Read by `core/render/slot.mjs` |
+| `RENDER_SLOT_HELD` | `1` = an outer process already holds a slot, so `acquire()` passes through without waiting. Read by `core/render/slot.mjs` |
+| `LEMO_VENC` | the video encoder — **the switch behind the "renders are always GPU" rule**: unset (default) or `h264_nvenc` = GPU, `libx264` = CPU, any other value aborts (it never falls back to the CPU encoder silently). Read by `core/render/video.mjs` (render) and `core/render/mux.sh` / `styles/*/demo/mux.sh` (mux) |
+| `LEMO_NVENC_CQ` | NVENC `-cq` (default 23; lower = higher quality, bigger file). Read by `core/render/mux.sh` |
+| `LEMO_RENDER_MIN_FREE_MIB` | free VRAM (MiB) the renderer aims for before it starts (default 3000); if short it evicts what it can and **still renders**. Read by `core/render/video.mjs` |
+| `LEMO_VRAM_MODULE` | override the VRAM-helper module path (default `D:/lemo-tools/lib/vram.mjs` on Windows, `/mnt/d/lemo-tools/lib/vram.mjs` on Linux); if it will not load, the precheck is skipped with a notice. Read by `core/render/video.mjs` |
+| `LEMO_VRAM_DEBUG` | `1` prints a line when free VRAM is below the `LEMO_RENDER_MIN_FREE_MIB` advisory (the render still runs). Read by `core/render/video.mjs` |
 | `LEMO_COLOR=bt709` | `mux.sh` writes limited-range BT.709 instead of the default full-range output |
+| `LEMO_ABR` | AAC audio bitrate for the muxed film (default `256k`). Read by `core/render/mux.sh` |
+| `LEMO_STRICT_UPSTREAM` | `1` restores the upstream duration-probe behaviour (for byte-for-byte comparison). Read by `core/render/mux.sh` |
+| `LEMO_LN_TP` | the loudnorm true-peak target the two-pass audio normalisation starts from (default −1.7). Read by `core/render/mux.sh` and `styles/*/demo/mux.sh` |
+| `LEMO_LN_TP_STEP` | how far (dB) to lower `LEMO_LN_TP` per re-encode when the measured true peak misses the target (default 0.25). Read by the same `mux.sh`s |
+| `LEMO_LN_TP_TRIES` | max re-encodes when chasing the true-peak target (default 8; the video stream is reused via `-c:v copy`). Read by the same `mux.sh`s |
+| `LEMO_VCOPY` | `1` = redo only the audio and `-c:v copy` the video stream (no video re-encode). Read by the same `mux.sh`s |
 | `WHISPER_MODEL` | Whisper model name or local folder for `asr_check.py` (same as `--model`; default `base.en` for English, `base` otherwise; `small` is more accurate for Chinese) |
 | `LEMO_ASR_OFFLINE` | `asr_check.py` offline switch: `auto` (default — run offline with `HF_HUB_OFFLINE=1` whenever the model is already in the local HF cache, so no call to huggingface.co; a cache miss prints a clear notice and falls back to the network), `1` force offline (a cache miss fails fast), `0` force online |
 | `HF_ENDPOINT` | Hugging Face mirror for the Whisper download |
+| `HF_HOME` | the Hugging Face home; `asr_check.py` locates the hub cache as `HUGGINGFACE_HUB_CACHE` > `HF_HOME/hub` > `~/.cache/huggingface/hub`. Read by `core/tts/asr_check.py` |
+| `HUGGINGFACE_HUB_CACHE` | the HF hub cache root (wins over `HF_HOME/hub`). Read by `core/tts/asr_check.py` |
+| `HF_HUB_OFFLINE` | **set by `asr_check.py` itself, not an external input**: in offline mode it exports `1` for its own process before importing `huggingface_hub` (driven by `LEMO_ASR_OFFLINE`) |
 | `INDEXTTS_HOME` | the Index-TTS 2.5 portable app's root folder (default `D:/Index-tts/Index-tts_v2.5`) |
 | `INDEXTTS_APP` | its app folder, the working directory (default `<INDEXTTS_HOME>/app`) |
 | `INDEXTTS_PYTHON` | the app's own Windows venv python (default `<INDEXTTS_APP>/.venv/Scripts/python.exe`) |

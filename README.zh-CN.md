@@ -86,7 +86,7 @@ agent 会读三份指南，像一个小工作室一样开工。指南是英文�
 
 - 一支片子 agent 大约要做 30–60 分钟，token 用量不小。
 - 需要 Node 20+、ffmpeg 和 Python 3.11+（或 [uv](https://docs.astral.sh/uv/)），其余由 agent 安装。
-- 默认输出 1920×1080、24 fps，其他尺寸可以指定。
+- 默认输出 1080×1920（9:16）、24 fps，其他尺寸可以指定（低层渲染工具缺省 1920×1080）。
 
 更新：`claude plugin marketplace update lemolab && claude plugin update lemo-opuscar@lemolab`，然后重启 Claude Code（`~/lemo-opuscar` 里的库会在下一次做片时自动更新）；卸载：`claude plugin uninstall lemo-opuscar@lemolab` 并删除 `~/lemo-opuscar`。一直卡住就[提个 issue](https://github.com/lemomo-ai/lemo-opuscar/issues)。
 

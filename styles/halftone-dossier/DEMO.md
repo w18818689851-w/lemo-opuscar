@@ -2,7 +2,7 @@
 
 One example among many. Don't reuse its story, arc, shots, props or timings.
 
-Demo: *胖橘案卷 Case File: Chubby* (30.0 s) · `halftone-dossier.mp4` · source in [`demo/`](demo/) · engine: one self-contained `demo/index.html` (SVG scene graph + two Canvas 2D overlays), rendered frame by frame by Playwright headless Chromium at 1920×1080 / 30 fps; score and SFX synthesized in `demo/music.py`.
+Demo: *胖橘案卷 Case File: Chubby* (30.0 s) · `halftone-dossier.mp4` · source in [`demo/`](demo/) · engine: one self-contained `demo/index.html` (SVG scene graph + two Canvas 2D overlays), rendered frame by frame by Playwright headless Chromium at 1920×1080 / 24 fps（★ 2026-10-07 复核订正：原记 30 fps；随库成片实测 24 fps）; score and SFX synthesized in `demo/music.py`.
 
 
 **The demo's on-screen text is Chinese** (title cards, captions, stamps). There is no narration. See "Making an English version" below.
@@ -172,7 +172,7 @@ Everything lives in `demo/index.html`. It is one file by design; to start a new 
 | 1037–1064 | `render(t)` | boil reseed, scene switching, `SHAKES` + beat pulse (`inGroove` windows), flash times, final fade window, HUD, wipe, grain. |
 | 1066–1084 | `init()` | font preload (two passes) → `buildPaper()` → `buildAll()` → `window.READY = true`; `?t=` query renders a given time in a normal browser. |
 
-The contract with `render.mjs` is only `window.READY` and `window.render(t)`; change `FPS`/`DUR` in both files for a different length.
+The contract with `render.mjs` is only `window.READY` and `window.render(t)`; change `FPS`/`DUR` in both files for a different length.（渲染器缺省见 `core/render/video.mjs` 的 `--fps`，缺省 24。）
 
 **Minimal new scene** (paste inside `buildAll()`, then add its cut to `WIPES`, a `chips` row, `SHAKES` for the stamp, and the SFX times in `music.py`):
 
