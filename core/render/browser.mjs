@@ -1,5 +1,9 @@
-// 无头 Chrome 的启动参数。浏览器本身交给 playwright 按它的版本自己找（npm run 时装的 chromium-headless-shell）；
-// 想用别的可执行文件：PLAYWRIGHT_CHROME=/path/to/chrome-headless-shell
+// 无头 Chrome 的启动参数。浏览器本身交给 playwright 按它的版本自己找 ——
+//   ★ 2026-10-07 订正：原注释写「npm run 时装的 chromium-headless-shell」，**不成立** ——
+//   `package.json` **没有 `scripts` 字段**（`npm run` 无脚本可跑），而装的是 `playwright-core`（它**不**下载浏览器）。
+//   真正装它的是官方安装器 `plugin/skills/lemo-opuscar/scripts/setup.sh` 里那一行：
+//   `node node_modules/playwright-core/cli.js install chromium-headless-shell`（幂等，已存在则 no-op）。
+//   想用别的可执行文件：PLAYWRIGHT_CHROME=/path/to/chrome-headless-shell
 // GPU：macOS 显式用 Metal（新版 headless-shell 上 --use-angle=gl 会退回 SwiftShader 软渲染，慢 ~6 倍）；
 //      其它系统不强加后端。LEMO_ANGLE=metal|gl|vulkan|swiftshader… 可覆盖，LEMO_ANGLE=default 表示不传 --use-angle。
 export const EXE = process.env.PLAYWRIGHT_CHROME || undefined;   // undefined = 让 playwright 自己找
