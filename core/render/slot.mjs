@@ -6,6 +6,14 @@
 // 一个槽位 = 锁目录下的一个目录：里面有 pid（占用者）和 beat（占用者每 15 秒 touch 一次的心跳）。
 // 占用者进程不在了（EPERM 算还在）、或心跳超过 90 秒没动，槽位就是过期的，可以被接管。
 // 所有"看状态 → 接管/占槽"的动作都在一把极短的互斥锁（.mutex 目录）里做，所以任何时刻一个槽位只有一个持有者。
+//
+// 已知行为与前置条件（用之前先看清这两条）：
+//   ① 过期判据是 **OR**：「占用者进程不在」**或**「心跳停更超过 STALE_AFTER(90s)」任一条成立，槽位就算过期、可被接管。
+//      心跳由 setInterval(…, 15000) 写。⇒ **前置条件：占用者不得让自己的事件循环阻塞超过 STALE_AFTER。**
+//      （唯一调用者 core/render/video.mjs 的渲染主循环每帧 await、事件循环不被阻塞，所以当前不触发。）
+//      违反的后果：心跳停更 ⇒ 活着的占用者被判过期、被别的进程接管 ⇒ 同时渲染数**超过 RENDER_SLOTS** ⇒ 显存风险。
+//   ⑤ acquire() 没有超时、也没有退出条件：拿不到槽就一直等下去，唯一的信号是每 60 秒一行 "waiting for a render slot"。
+//      ⇒ 故障形态是**静默挂起**（不抛错、不退出）。要有限等待，调用方得自己在外面套超时。
 import fs from 'fs'; import os from 'os'; import path from 'path'; import { spawn, execFileSync } from 'child_process'; import { fileURLToPath } from 'url';
 
 const DIR = process.env.RENDER_SLOT_DIR || path.join(os.tmpdir(), `lemo-opuscar-render-slots-${process.getuid?.() ?? 'u'}`);
@@ -59,6 +67,7 @@ function stale(d) {
 }
 
 export function tryTake(slots, free, minFree) {   // 导出仅供测试
+  fs.mkdirSync(DIR, { recursive: true });   // ③ 与 acquire() 一致：withMutex 要往 DIR 里建 .mutex，DIR 不存在就直接 ENOENT（导出 API 不能依赖调用者先替它 mkdir）
   return withMutex(() => {
     let live = 0; const open = [];
     for (let i = 0; i < slots; i++) {
@@ -86,7 +95,14 @@ export async function acquire({ slots, minFree } = {}) {
       let done = false;
       const release = () => {
         if (done) return; done = true; clearInterval(timer);
-        if (readPid(d) === process.pid) { const t = `${d}.rel-${process.pid}-${Date.now()}`; try { fs.renameSync(d, t); rmrf(t); } catch { rmrf(d); } }   // 只删自己的（被接管后不动别人的）
+        process.off('exit', release);   // ④ 幂等解绑：否则同进程每 acquire() 一次就多挂一个 'exit' 监听器、从不移除（第 11 个起 MaxListenersExceededWarning，且 release 会被反复触发）
+        // ② 「判断 + rename + rmrf」必须和 tryTake 的「看状态 → 接管/占槽」用**同一把**互斥锁：
+        //    否则 release 判完 pid、还没 rename 的空档里，别的进程可能刚好接管了这个槽位（rename 旧的、mkdir 新的、写自己的 pid），
+        //    release 的 renameSync 照样成功 ⇒ 把**新持有者**的槽位 rename 走并删掉，新持有者以为自己有槽、其实槽没了。
+        //    DIR 必然存在：我们正持有 DIR 里的槽位目录 d（release 只在拿到槽之后才会被调用），所以 withMutex 往 DIR 里建 .mutex 不会 ENOENT。
+        withMutex(() => {
+          if (readPid(d) === process.pid) { const t = `${d}.rel-${process.pid}-${Date.now()}`; try { fs.renameSync(d, t); rmrf(t); } catch { rmrf(d); } }   // 只删自己的（被接管后不动别人的）
+        });
       };
       process.on('exit', release);
       return release;
