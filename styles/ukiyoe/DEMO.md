@@ -89,7 +89,7 @@ Voice: calm male storyteller, first person, 5 short lines (Kokoro `am_adam`, spe
 
 - **Subtitle cartouche**: cream `rgba(243,231,198,.96)` slip, 2.6 px + 1 px ink border, a small red seal "旅" at the left, Shippori Mincho 500 42 px in sumi, centred 72 px above the bottom. It prints in over 0.22 s with the reveal mask and fades out over 0.25 s.
 - **View cartouche** (vertical, Yuji Syuku): 一 田毎の朝 · 二 雨の橋 · 三 茶屋の窓 · 四 海立つ · 五 山, seal below/beside. Cartouche drop-in: fade + 14 px.
-- **Title**: a vertical cartouche 山へ五景 + a horizontal English slip *Toward the Mountain* laid on the first print, stamped with a seal, lifted away before the first line.
+- **Title**: a vertical cartouche 山へ五景 + a horizontal English slip *Toward the Mountain* laid on the first print, stamped with a seal, lifted away before the first line. ★ 2026-10-08 说明（片名两级命名，非不一致）：本片**片内短名** = *Toward the Mountain*（`demo/film.js` 的 `FILM_META.title`、`demo/index.html` 的 `<title>`、片头字卡与 `CREDITS`）；**画廊全名** = *A Journey Toward the Mountain*（`style.json#film`、`README.md` 画廊卡、`SKILL.md` front-matter 的 `film:` 字段）。全库同型另有 `art-deco`（Midnight at the Starlight Hotel / Midnight）、`blueprint`、`engraving`、`ascii-crt`。两处都合理 ⇒ 保留，不强改。
 
 ## End card
 

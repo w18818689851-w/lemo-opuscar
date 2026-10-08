@@ -307,12 +307,12 @@ Two defaults, on purpose:
 
 - **The publishing flow defaults to 9:16** (`DEFAULT_RATIO`, the first entry of `RATIOS`) and passes
   `--size WxH` down to the render tools explicitly.
-- **The low-level tools keep 1920×1080** (`takeSize` in `still.mjs` / `video.mjs`). The **35** demos that
-  ship a `build.sh` (8 of the 43 styles ship none: `brick-toy`, `cel-anime-80s`, `game-show`,
-  `halftone-dossier`, `hd-2d`, `paper-popup`, `pictogram-motion`, `watercolor`) call them without `--size`
-  and compose at 1920×1080; moving the default down there would crop all 35. The count and the "no size
-  passed" claim are both machine-checkable: `ls styles/*/demo/build.sh | wc -l` → 35 and
-  `grep -l -- --size styles/*/demo/build.sh` → empty.
+- **The low-level tools keep 1920×1080** (`takeSize` in `still.mjs` / `video.mjs`). The **37** demos that
+  ship a `build.sh` (6 of the 43 styles ship none: `brick-toy`, `cel-anime-80s`, `game-show`,
+  `halftone-dossier`, `paper-popup`, `watercolor`) call them without `--size` and compose at 1920×1080;
+  moving the default down there would crop all 37. The count and the "no size passed" claim are both
+  machine-checkable: `ls styles/*/demo/build.sh | wc -l` → 37 and `grep -l -- --size styles/*/demo/build.sh` → empty.
+  ★ 2026-10-08 复核订正：原记 **35** demos / "8 of the 43 styles"（名单含 `hd-2d`、`pictogram-motion`）；现值 **37 / 6**（`hd-2d`、`pictogram-motion` 现已带 `build.sh`）。旧值保留作历史。
 
 `--size` beats `--ratio`; a custom size must be even and within `MIN_SIZE`–`MAX_SIZE` on both sides
 (96–8192 — the floor is the renderer's measured geometric minimum, not a round number; see

@@ -11,8 +11,8 @@ const MOUNT = '/@film/'; let filmDir = null;
 // Chrome/Chromium 在 URL 层就拒连一批「受限端口」（net/base/port_util.cc 的 kRestrictedPorts），
 // 命中即 page.goto 抛 net::ERR_UNSAFE_PORT —— 跟我们的服务无关，纯属假失败（实测 2049 可完整复现）。
 // 为什么必须处理：下面 listen(0) 由 OS 随机分配端口，而本机（Windows）动态端口范围是 1024–15000，
-// 其中落着 17 个受限端口；6 万次 listen(0) 实测命中 72 次（0.120%，与理论 17/13974=0.122% 吻合，
-// 其中 2049 命中 6 次）⇒ 43 个风格连跑一轮就有约 5% 的概率撞上一次。绑好后校验、命中就换。
+// 其中落着 17 个受限端口；6 万次 listen(0) 实测命中 72 次（0.120%，与理论 17/13977=0.122% 吻合，
+// 其中 2049 命中 6 次）⇒ 43 个风格连跑一轮就有约 5% 的概率撞上一次。绑好后校验、命中就换。 ★ 2026-10-08 复核订正：原记分母 13974；13977 = 1024–15000 的端口数（本机快照，实测 `netsh int ipv4 show dynamicport tcp` 端口数 13977；换机/改配置会变，比值结论不依赖具体分母），0.122% 不变。
 // 表来源：https://raw.githubusercontent.com/chromium/chromium/main/net/base/port_util.cc（kRestrictedPorts，逐字核对）
 const CHROME_BLOCKED_PORTS = new Set([0, 1, 7, 9, 11, 13, 15, 17, 19, 20, 21, 22, 23, 25, 37, 42, 43, 53, 69, 77, 79, 87, 95,
   101, 102, 103, 104, 109, 110, 111, 113, 115, 117, 119, 123, 135, 137, 139, 143, 161, 179, 389, 427, 465,
