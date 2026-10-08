@@ -19,10 +19,10 @@ export function requireDemo(dir) {
 // MIN_SIZE–MAX_SIZE（下限由 size.mjs 依据渲染器的几何下限定出，见那里的推导）。
 // --ratio <spec>：与 --size 同义，但多接受比例写法（9:16、16:9、3:4、4:3、1:1）。--size 优先级高于 --ratio。
 // 两个都不给时返回 1920x1080（**旧行为不变**）。为什么不把缺省改成 DEFAULT_RATIO（9:16）：
-// still.mjs / video.mjs 是全库 35 个 demo/build.sh（43 个风格里 8 个没带 build.sh）直接调的低层工具，
-// 它们都不传 --size、全按 1920x1080 构图；把低层缺省改成 9:16 会让这 35 部示例片当场全坏。
+// still.mjs / video.mjs 是全库 37 个 demo/build.sh（43 个风格里 6 个没带 build.sh）直接调的低层工具，
+// 它们都不传 --size、全按 1920x1080 构图；把低层缺省改成 9:16 会让这 37 部示例片当场全坏。
 // 「默认 9:16」落在出片流程（lemo-make 编排器与控制台），那里会显式传尺寸。缺省比例可用 DEFAULT_RATIO 查（本模块已 re-export）。
-// 口径：ls styles/*/demo/build.sh | wc -l = 35；grep -l -- --size styles/*/demo/build.sh 为空（没有一个传尺寸）。
+// 口径：ls styles/*/demo/build.sh | wc -l = 37；grep -l -- --size styles/*/demo/build.sh 为空（没有一个传尺寸）。
 export function takeSize(args) {
   // ★ 取值必须区分「没给这个选项」与「给了但没跟值」：
   //   前者用 null（走缺省），后者**必须报错**。旧实现两种都得到 undefined，而下面用 `!= null` 判空

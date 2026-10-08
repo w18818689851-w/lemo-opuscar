@@ -352,6 +352,8 @@ by, and the films `styleboard/build.py:31-49` re-reads each `style.json`'s `dur`
   (no download — `ffprobe` reads the moov over HTTP):
   `ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate,nb_frames,duration -of csv=p=0
   https://github.com/lemomo-ai/lemo-opuscar/releases/download/films/<slug>.mp4`.
+  ★ **For audio caliber this doctrine does *not* hold** — the published film carries the **pre-fix** audio, so on
+  audio the local copy is what represents intent; see **The published film carries the pre-fix audio** below.
 - **What the gates catch.** `check-film-aspect.mjs`'s **C class** (`:214-244`) ffprobes every sample film and
   FAILs unless it is **exactly 1920×1080**, naming the slug and file (`C 样板片画幅被改`, `:241`);
   `check-film-delivery.mjs`'s C class compares the declared `generatedVideo.width/height` against the real file
@@ -362,6 +364,62 @@ by, and the films `styleboard/build.py:31-49` re-reads each `style.json`'s `dur`
 delivered film follows the caller's `--ratio` (9:16 by default) and lands where the caller puts it:
 `D:/lemo-films/_jobs/<task id>/` from the console, or the `--out` directory on the command line. Do not "fix" a
 delivered film by rendering it into `D:/lemo-films/<slug>/`.
+
+## The published film carries the pre-fix audio
+
+**A released film's true peak is not the number in `_distill.json#selfCheck.loudness` — the two describe different
+audio files.** The `films` release assets were built **2026-09-26** (a few **09-29**); `scripts/fix-truepeak.mjs`
+(**2026-10-03**) re-mixed **only the local finished films** (`D:/lemo-films/<slug>/<slug>.mp4`, `-c:v copy`, so the
+video stream is byte-identical) and wrote the result back into `selfCheck.loudness`. It **never re-uploaded the
+re-mixed audio to the `films` release** (the script names no `release` / `upload` / `github`). So a published film
+carries the **pre-fix** audio while `selfCheck.loudness` describes the **local copy** — on audio caliber,
+`selfCheck.loudness` is **not the authoritative artifact**.
+
+**Measured — 43 published films, read from the release itself (`ffprobe` off the moov, then a full decode, two
+calibers):**
+- ★ **37 of 43 (86 %) exceed the project's own delivery line of −1.2 dBTP** (`:67`: the finished film **must**
+  measure true peak ≤ −1.2 dBTP);
+- ★ **1 is above 0 dBTP (clipped):** `pictogram-motion`, **+0.46 dBTP**;
+- only **6 pass**: `rubber-hose` −3.11, `cel-anime-80s` −3.08, `spy-titles` −2.23, `tilt-shift` −1.37,
+  `urban-sketch` −1.33, `paper-lantern` −1.33;
+- **loudness (I) and LRA largely hold** (I: 1 of 43 outside the ±0.5 LU tolerance — `shadow-puppet`, Δ0.51;
+  LRA: **6** outside ±0.5 — worst is `tilt-shift` Δ4.9, then `pictogram-motion` Δ1.9 and `iso-infographic` Δ1.8);
+- ★ **the true-peak error runs one way — the published film is always higher** (27 of 43 outside the ±0.5 dB
+  tolerance, up to **+2.34 dB**).
+
+**How to judge — two commands, both reading the release without downloading it.**
+
+```sh
+# frame rate / frame count straight off the release's moov:
+ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate,nb_frames,duration -of csv=p=0 \
+  https://github.com/lemomo-ai/lemo-opuscar/releases/download/films/<slug>.mp4
+
+# both audio calibers in one decode (download first for bit-exact repeats — a streamed read jitters):
+ffmpeg -hide_banner -nostdin -i <url-or-file> \
+  -af ebur128=peak=true,loudnorm=I=-14:TP=-1.7:LRA=11:print_format=json -f null - 2>&1 \
+  | grep -E '^ +(I|LRA|Peak):|"input_(i|tp|lra)"'
+```
+
+★ **The true peak is `loudnorm`'s `input_tp`** (4× oversampled); **`ebur128`'s `Peak` is not the true peak** — it
+is the sample peak. `selfCheck.loudness.integratedLufs` equals `loudnorm`'s `input_i`, not `ebur128`'s `I` (the two
+differ by ≤0.3 LU). One `ffmpeg` pass yields both calibers and matches two passes bit-for-bit.
+
+**The root cause is closed.** The `crayon-book` triad — **backup (pre-fix local) −1.02 / published film −1.02 /
+re-mixed local (= `selfCheck`) −1.57** — shows the published film matches the **pre-fix** copy, not the re-mixed
+one. `D:/lemo-films/_tpfix-backup/` holds **18 backups dated 2026-10-03**, and the release assets' `created_at` is
+**2026-09-26 / 09-29** — all **before** the 10-03 re-mix. Sources: `_distill/分叉8部-发布片音频口径-2026-10-08.md`,
+`_distill/其余35部-发布片音频口径-2026-10-08.md`.
+
+★ **Open, not yet decided — whether to re-upload the re-mixed audio to the `films` release.** It is **not** a plain
+audio swap: the local copy is **24 fps** and the published film **60/30 fps**, so the fixed audio cannot simply be
+dropped in — the **published film's video stream must be re-muxed with the fixed audio** and re-uploaded, and that
+is a **public write** that needs the owner's call.
+
+★ **How this sits with the doctrine above.** A local copy can be re-rendered, so **`dur` follows the published
+film, not the copy** — the published film is the **authoritative artifact** for **content and form** (duration,
+frame rate, cut, language). ★ **On audio caliber it needs a footnote:** because the published film is the
+**pre-fix** one, **the local copy is what represents the project's intent**. This is a footnote to the doctrine,
+**not a refutation of it**.
 
 ## Register
 

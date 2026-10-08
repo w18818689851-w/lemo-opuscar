@@ -6,10 +6,10 @@
 // （见 styles/engraving/demo/main.js），否则 --size 只会把画面裁掉一块。
 //
 // 注意：这里的默认比例是 9:16，但**低层渲染工具 takeSize 的默认仍是 1920x1080**。
-// 理由：still.mjs / video.mjs 是全库 35 个 demo/build.sh（43 个风格里 8 个没带 build.sh）直接调的低层工具，
-// 它们都不传 --size、全按 1920x1080 构图；把低层默认改成 9:16 会让这 35 部示例片当场全坏。
+// 理由：still.mjs / video.mjs 是全库 37 个 demo/build.sh（43 个风格里 6 个没带 build.sh）直接调的低层工具，
+// 它们都不传 --size、全按 1920x1080 构图；把低层默认改成 9:16 会让这 37 部示例片当场全坏。
 // 「默认 9:16」落在出片流程（D:\lemo-tools\lemo-make.mjs 编排器与控制台），那里会显式传尺寸。
-// 口径：ls styles/*/demo/build.sh | wc -l = 35；grep -l -- --size styles/*/demo/build.sh 为空（没有一个传尺寸）。
+// 口径：ls styles/*/demo/build.sh | wc -l = 37；grep -l -- --size styles/*/demo/build.sh 为空（没有一个传尺寸）。
 
 // 预设比例清单：第一条即默认项，所以 9:16 排最前。
 export const RATIOS = [
