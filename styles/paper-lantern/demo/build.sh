@@ -1,5 +1,8 @@
 #!/bin/sh
 # paper-lantern · 纸雕灯影 —— 本 demo 完整链（cwd = 仓库根；与 DEMO.md「Build notes」一致）。
+#   ★ 2026-10-08 澄清（保留原句）：与 DEMO.md「Build notes」一致的是**参数**（30 fps / grain 0）；
+#     **渲染产物文件名不同**——本文件与编排器都落 `out/video_gpu.mp4`，而 `DEMO.md:150` 写的是 `out/video.mp4`，
+#     文件名以编排器命名为准（第 4 步已显式 `--out $D/out/video_gpu.mp4`，与第 5 步 mux 的输入同路径）。
 #
 # ★ 本文件对编排器（lemo-tools/lemo-make.mjs）有一处**声明**作用，务必保留：
 #   渲染行 `node core/render/video.mjs $D … --q "content=script.json"`。
