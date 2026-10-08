@@ -11,4 +11,9 @@ $PY $D/music/score.py                                 # 5. 原创配乐合成 �
 $PY $D/mix.py                                         # 6. 拟音 + 对白 + 配乐闪避 + 环境 → mix.wav
 node $D/srt.mjs                                       # 7. 字幕 → scifi-toon.srt
 node core/render/video.mjs $D --fps 24 --workers 4 --out $D/out/video24.mp4   # 8. 逐帧渲染（~15s）
-sh core/render/mux.sh $D/out/video24.mp4 $D/mix.wav styles/scifi-toon/scifi-toon.mp4 24   # 9. 合成 + −14 LUFS
+# 9. 合成 + −14 LUFS
+#    ★ 第 4/5 参（fps / grain）写**字面量**：编排器 `muxIntent()` 只认 `mux.sh` 之后行尾的**纯数字**
+#      （`lemo-make.mjs:1088-1098`；变量如 `$FPS` 会被判 `null`）。★ 2026-10-08 补上显式 `2`：
+#      此前只传 4 参 ⇒ `muxIntent` 读到 `null` ⇒ 编排器落 `core/render/mux.sh:36` 的默认 `GR="${5:-2}"`。
+#      值**不变**（仍是 2，与本片已发布影片一致），但把「意图」写死、消除对默认值的静默依赖。
+sh core/render/mux.sh $D/out/video24.mp4 $D/mix.wav styles/scifi-toon/scifi-toon.mp4 24 2   # 9. 合成 + −14 LUFS

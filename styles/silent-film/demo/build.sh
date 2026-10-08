@@ -8,7 +8,9 @@ PY=.venv/bin/python; D=styles/silent-film/demo; O=styles/silent-film
 case "${LEMO_VENC:-}" in
   ''|h264_nvenc) VARG="-c:v h264_nvenc -preset p5 -profile high -rc vbr -cq 30 -b:v 0";;
   libx264) VARG="-c:v libx264 -preset slow -crf 25 -tune grain";;
-  *) echo "mux.sh: LEMO_VENC must be h264_nvenc or libx264, or unset (which means h264_nvenc, the GPU encoder), got '$LEMO_VENC'. Not falling back to the CPU encoder silently: a typo would look like GPU encoding while libx264 does the work." >&2; exit 1;;
+  # ★ 本行报错标签**不能**出现字面量 "mux.sh"：编排器 muxIntent() 取的是**第一条**非注释、含 'mux.sh' 的行
+  #   （lemo-make.mjs:1088-1098），若此处出现会被误当成 mux 调用行 ⇒ 读不到下面第 7 步声明的 grain 1。
+  *) echo "mux step: LEMO_VENC must be h264_nvenc or libx264, or unset (which means h264_nvenc, the GPU encoder), got '$LEMO_VENC'. Not falling back to the CPU encoder silently: a typo would look like GPU encoding while libx264 does the work." >&2; exit 1;;
 esac
 node $D/tools/dump_timeline.mjs                                   # 1. 速度网格（cue sheet 分段）→ timeline.json
 $PY $D/music/score.py                                             # 2. 原创默片钢琴伴奏（立式钢琴 + 簧风琴）→ music/score.wav + score.json

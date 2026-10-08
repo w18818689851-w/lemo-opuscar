@@ -37,7 +37,9 @@ $PY $D/mix.py
 node core/render/video.mjs $D --fps $FPS --workers 6 --q "content=script.json" --out $D/out/video_gpu.mp4
 
 # 5. 混流（第 4 参 = fps，第 5 参 = grain；本风格声明「no grain」⇒ 传 0，见 DEMO.md:150 的 `30 0`）
+#    ★ 30 与 0 写**字面量**：编排器 muxIntent() 只认 mux.sh 行尾的纯数字（lemo-make.mjs:1088-1098），
+#      写成 "$FPS" 会让它取不到颗粒 ⇒ 退回 mux 脚本默认 2，与 DEMO.md 声明的 grain 0 不符。
 V=$D/out/video_gpu.mp4
 A=$D/out/mix.wav
 O=styles/paper-lantern/paper-lantern.mp4
-sh core/render/mux.sh "$V" "$A" "$O" "$FPS" 0
+sh core/render/mux.sh "$V" "$A" "$O" 30 0
