@@ -15,7 +15,7 @@
 set -e
 D=styles/paper-lantern/demo
 PY=.venv/bin/python
-FPS=24
+FPS=30
 
 # 1. 配音（Index-TTS 本地，零样本克隆）→ $D/vo/*.wav + $D/vo/dur.json
 #    走 demo/tts/gen.py（编排器的「demo 自带 TTS」入口）；它会带上 --target 对齐已有时间轴。
@@ -28,10 +28,13 @@ node $D/render/cues.mjs
 $PY $D/mix.py
 
 # 4. 渲染（Windows GPU；--q content=script.json 见文件头说明）
-node core/render/video.mjs $D --workers 6 --q "content=script.json"
+#    ★ 必须显式 --out，且**与第 5 步 mux 的输入 $V 指向同一个文件**：不写 --out 时 video.mjs 默认写
+#    out/video.mp4（core/render/video.mjs:13），而第 5 步读的是 out/video_gpu.mp4 —— 那样单独跑本脚本
+#    会静默混入上一次遗留的 out/video_gpu.mp4。显式 --out 后二者同一路径，杜绝该隐患。
+node core/render/video.mjs $D --fps $FPS --workers 6 --q "content=script.json" --out $D/out/video_gpu.mp4
 
-# 5. 混流
+# 5. 混流（第 4 参 = fps，第 5 参 = grain；本风格声明「no grain」⇒ 传 0，见 DEMO.md:150 的 `30 0`）
 V=$D/out/video_gpu.mp4
 A=$D/out/mix.wav
 O=styles/paper-lantern/paper-lantern.mp4
-sh core/render/mux.sh "$V" "$A" "$O" "$FPS"
+sh core/render/mux.sh "$V" "$A" "$O" "$FPS" 0
