@@ -2,7 +2,7 @@
 
 One example among many. Don't reuse its story, arc, shots, props or timings.
 
-Demo: *Aichi-Nagoya 2026 — All 43 Sports* (EN-JP version, 161.6 s, 1920×1080 @ 24 fps（★ 2026-10-07 复核订正：原记 60 fps；随库成片实测 24 fps）, 150 BPM, 70 sport cards, no narration) · `pictogram-motion.mp4` · source in [`demo/`](demo/) (local, not published) · engine: Canvas2D (`engine.js` + `scenes.js` + `poses/*.js`), headless Chrome frame capture, numpy-synthesised score.
+Demo: *Aichi-Nagoya 2026 — All 43 Sports* (EN-JP version, 163.6 s, 1920×1080 @ 60 fps（★ 2026-10-07 复核订正：原记 60 fps；随库成片实测 24 fps —— ★ 2026-10-08 撤回：24 fps 系本地重渲副本读数；已发布影片（`films` release）实为 60 fps / 9816 frames）, 150 BPM, 70 sport cards, no narration) · `pictogram-motion.mp4` · source in [`demo/`](demo/) (local, not published) · engine: Canvas2D (`engine.js` + `scenes.js` + `poses/*.js`), headless Chrome frame capture, numpy-synthesised score.
 
 
 > **Rights note.** The demo is a fan-made promo for a real event, the 20th Asian Games Aichi-Nagoya 2026. The event name (AICHI-NAGOYA 2026 / THE 20TH ASIAN GAMES), the slogan (IMAGINE ONE ASIA / ここで、ひとつに。), the emblem-like red-sun-and-rings mark drawn in code, the five-colour palette and its colour names, and the grid pattern language all follow the organiser's identity. They belong to the organiser (Aichi-Nagoya Asian Games Organising Committee / Olympic Council of Asia). `demo/ref/` holds official images downloaded from the Games' website for reference only. They are never drawn into the film and must not be redistributed. **Any other film made from this code must replace all event-specific elements** (see [Replacing the event elements](#replacing-the-event-elements)).

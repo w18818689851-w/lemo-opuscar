@@ -2,7 +2,7 @@
 
 One example among many. Don't reuse its story, arc, shots, props or timings.
 
-Demo: *AI进化节拍 · Rhythm of AI 1997 → 2026* (v3, 148.8 s, 1920×1080, 24 fps（★ 2026-10-07 复核订正：原记 30 fps；随库成片实测 24 fps）) · `game-show.mp4` · source in [`demo/`](demo/) · engine: plain SVG DOM with a pure `render(t)`, screenshotted by Playwright + Chrome Headless Shell; original score synthesized in numpy from the picture's own `events.json`.
+Demo: *AI进化节拍 · Rhythm of AI 1997 → 2026* (v3, 148.8 s, 1920×1080, 30 fps（★ 2026-10-07 复核订正：原记 30 fps；随库成片实测 24 fps —— ★ 2026-10-08 撤回：24 fps 系本地重渲副本读数；已发布影片（`films` release）实为 30 fps / 4464 frames）) · `game-show.mp4` · source in [`demo/`](demo/) · engine: plain SVG DOM with a pure `render(t)`, screenshotted by Playwright + Chrome Headless Shell; original score synthesized in numpy from the picture's own `events.json`.
 
 
 **Language note.** All on-screen text in the demo is **Chinese** (level names, year banners, labels, the report card, the credit card). The only audio words are short **English shouts** ("Checkmate.", "Hey!", "Question!"). There is **no narration**. To make an English version, see "Switching the text to English" below.

@@ -2,7 +2,7 @@
 
 One example among many. Don't reuse its story, arc, shots, props or timings.
 
-Demo: *The Little Sprite's Adventure* (*Pip's Paper Adventure*, 小精灵冒险记) (133.0 s, 1920×1080, 24 fps（★ 2026-10-07 复核订正：原记 60 fps；随库成片实测 24 fps）) · `paper-popup.mp4` · source in [`demo/`](demo/) · engine: three.js r170 (WebGL2) rendered frame by frame in headless Chrome, Canvas2D for all paper art, Python for score editing and mixing
+Demo: *The Little Sprite's Adventure* (*Pip's Paper Adventure*, 小精灵冒险记) (133.0 s, 1920×1080, 60 fps（★ 2026-10-07 复核订正：原记 60 fps；随库成片实测 24 fps —— ★ 2026-10-08 撤回：24 fps 系本地重渲副本读数；已发布影片（`films` release）实为 60 fps / 7980 frames）) · `paper-popup.mp4` · source in [`demo/`](demo/) · engine: three.js r170 (WebGL2) rendered frame by frame in headless Chrome, Canvas2D for all paper art, Python for score editing and mixing
 
 
 ## Story & structure

@@ -342,9 +342,16 @@ by, and the films `styleboard/build.py:31-49` re-reads each `style.json`'s `dur`
   which is what `demo/mux.sh` (its `tpad=stop_duration=2` tail), `DEMO.md` ("163.6 s, 9816 frames") and `style.json`'s
   `"dur": 163.6` all say. *Why:* `style.json.dur` is the runtime the gallery shows, and `styleboard/catalog.json`
   is built from it — reading it off a hand-overwritten local copy puts a wrong runtime on the card. *How to judge:*
-  `ffprobe` the local file and compare **both** duration and frame rate against the line `DEMO.md` records; the
-  other 42 styles match their published film exactly (spot-checked watercolor 113.6, art-deco 58.4, hd-2d 76.5,
-  brick-toy 54.0), so a single mismatch means the local copy was overwritten — do not "fix" `style.json` to match it.
+  `ffprobe` the local file and compare **both** duration and frame rate against the line `DEMO.md` records. The
+  **duration** matches the published film for the other 42 styles (spot-checked watercolor 113.6, art-deco 58.4,
+  hd-2d 76.5, brick-toy 54.0; a re-render may differ by a frame), but the **frame rate** need not — every local
+  copy is 24 fps (the tool's `--fps` default), while the published film is **60 fps** for `watercolor` / `hd-2d` /
+  `paper-popup` / `pictogram-motion` and **30 fps** for `game-show` / `halftone-dossier` / `living-screencast` /
+  `paper-lantern` (measured 2026-10-08). So a **duration** mismatch means the local copy was overwritten; a
+  frame-rate mismatch alone does not — do not "fix" `style.json` to match it. To read the *published* film directly
+  (no download — `ffprobe` reads the moov over HTTP):
+  `ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate,nb_frames,duration -of csv=p=0
+  https://github.com/lemomo-ai/lemo-opuscar/releases/download/films/<slug>.mp4`.
 - **What the gates catch.** `check-film-aspect.mjs`'s **C class** (`:214-244`) ffprobes every sample film and
   FAILs unless it is **exactly 1920×1080**, naming the slug and file (`C 样板片画幅被改`, `:241`);
   `check-film-delivery.mjs`'s C class compares the declared `generatedVideo.width/height` against the real file
